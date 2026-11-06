@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="BlueArc">
+<title>BlueArc — Suivi sport & nutrition</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%23070b14'/><text x='50' y='68' font-size='56' text-anchor='middle'>💪</text></svg>">
+
+<!-- ============================================================
+     BlueArc — Application de suivi sportif & nutritionnel
+     Fichier unique autonome, compatible GitHub Pages.
+     Toutes les données sont stockées dans le localStorage.
+     Bibliothèques (CDN) : Tailwind CSS, Chart.js, Lucide icons.
+     ============================================================ -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  // Configuration Tailwind : palette sombre "sport"
+  if (window.tailwind) tailwind.config = {
+    theme: { extend: {
+      colors: {
+        ink: { 900:'#070b14', 800:'#0d1524', 700:'#142036', 600:'#1f2f4a', 500:'#35496b' },
+        arc: '#4da3ff', flame: '#ff7a1a'
+      },
+      fontFamily: { display:['"Barlow Condensed"','system-ui','sans-serif'], sans:['Inter','system-ui','sans-serif'] }
+    }}
+  };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+<style type="text/tailwindcss">
+  @layer components {
+    .card { @apply bg-ink-800 border border-ink-600/60 rounded-2xl p-4 lg:p-5; }
+    .btn { @apply inline-flex items-center justify-center gap-2 rounded-xl font-semibold px-4 h-12 transition active:scale-[.97] select-none disabled:opacity-40 disabled:pointer-events-none; }
+    .btn-primary { @apply bg-arc text-ink-900 hover:brightness-110; }
+    .btn-ghost { @apply bg-ink-700 text-slate-100 hover:bg-ink-600; }
+    .btn-danger { @apply bg-red-500/15 text-red-400 hover:bg-red-500/25; }
+    .btn-sm { @apply h-10 px-3 text-sm rounded-lg; }
+    .inp { @apply w-full h-12 bg-ink-900 border border-ink-600 rounded-xl px-3 text-base text-white placeholder-slate-500 focus:outline-none focus:border-arc focus:ring-2 focus:ring-arc/30; }
+    .lbl { @apply block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1; }
+    .h-title { @apply font-display text-2xl font-bold uppercase tracking-wide; }
+    .tab { @apply flex-1 h-10 rounded-lg text-sm font-semibold text-slate-400 transition; }
+    .tab-on { @apply bg-ink-600 text-white; }
+    .chip { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold; }
+  }
+</style>
+<style>
+  html, body { background:#070b14; color:#e2e8f0; -webkit-tap-highlight-color:transparent; }
+  body { font-family: Inter, system-ui, sans-serif; overscroll-behavior-y: none; }
+  input[type=number]::-webkit-inner-spin-button { opacity:.3; }
+  select.inp { appearance:none; -webkit-appearance:none; background-image:none; }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .no-scrollbar::-webkit-scrollbar { display:none; }
+  @keyframes pop { 0%{transform:scale(.96);opacity:0} 100%{transform:scale(1);opacity:1} }
+  .pop { animation: pop .18s ease-out; }
+  @keyframes flash { 0%,100%{background:#0d1524} 50%{background:#1e4a8a} }
+  .flash { animation: flash .5s ease-in-out 4; }
+</style>
+</head>
+
+<body class="min-h-screen">
+
+<div class="lg:flex">
+  <!-- ===== Barre latérale (desktop) ===== -->
+  <aside class="hidden lg:flex lg:flex-col w-64 shrink-0 h-screen sticky top-0 border-r border-ink-600/60 bg-ink-800/60 p-5">
+    <div class="flex items-center gap-2 mb-8">
+      <div class="w-10 h-10 rounded-xl bg-arc text-ink-900 flex items-center justify-center"><i data-lucide="dumbbell" class="w-6 h-6"></i></div>
+      <span class="font-display text-2xl font-extrabold uppercase tracking-wide">BlueArc</span>
+    </div>
+    <nav id="sideNav" class="flex flex-col gap-1"></nav>
+    <p class="mt-auto text-xs text-slate-500">Données stockées sur cet appareil. Active la synchronisation dans Réglages pour les retrouver partout.</p>
+  </aside>
+
+  <div class="flex-1 min-w-0">
+    <!-- ===== En-tête mobile ===== -->
+    <header class="lg:hidden flex items-center justify-between px-4 pt-[max(env(safe-area-inset-top),12px)] pb-2">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-arc text-ink-900 flex items-center justify-center"><i data-lucide="dumbbell" class="w-5 h-5"></i></div>
+        <span class="font-display text-xl font-extrabold uppercase tracking-wide">BlueArc</span>
+      </div>
+      <a href="#reglages" class="w-11 h-11 rounded-xl bg-ink-700 flex items-center justify-center" aria-label="Réglages"><i data-lucide="settings" class="w-5 h-5"></i></a>
+    </header>
+
+    <!-- ===== Contenu principal (rendu par JS) ===== -->
+    <main id="main" class="px-4 lg:px-8 pt-2 lg:pt-8 pb-44 lg:pb-16 max-w-7xl mx-auto"></main>
+  </div>
+</div>
+
+<!-- ===== Navigation basse (mobile) ===== -->
+<nav id="bottomNav" class="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-ink-800/95 backdrop-blur border-t border-ink-600/60 pb-safe">
+  <div id="bottomNavInner" class="grid grid-cols-5"></div>
+</nav>
+
+<!-- ===== Chronomètre de repos (flottant) ===== -->
+<div id="restBar" class="hidden fixed z-40 left-3 right-3 bottom-[calc(72px+env(safe-area-inset-bottom))] lg:left-auto lg:right-6 lg:bottom-6 lg:w-96 rounded-2xl border border-arc/40 bg-ink-800 shadow-2xl shadow-black/60 p-3">
+  <div class="flex items-center gap-3">
+    <div class="flex-1">
+      <p id="restLabel" class="text-[11px] uppercase tracking-wider text-slate-400">Repos</p>
+      <p id="restTime" class="font-display text-4xl font-bold tabular-nums leading-none text-arc">0:00</p>
+    </div>
+    <button class="btn btn-sm btn-ghost !w-12" data-a="restAdd" data-s="-15">-15</button>
+    <button class="btn btn-sm btn-ghost !w-12" data-a="restAdd" data-s="15">+15</button>
+    <button class="btn btn-sm btn-ghost !w-12" data-a="restAdd" data-s="30">+30</button>
+    <button class="btn btn-sm btn-danger !w-10 !px-0" data-a="restStop" aria-label="Arrêter"><i data-lucide="x" class="w-4 h-4"></i></button>
+  </div>
+  <div class="mt-2 h-1.5 rounded-full bg-ink-600 overflow-hidden"><div id="restProg" class="h-full bg-arc" style="width:100%"></div></div>
+</div>
+
+<!-- ===== Modale & toasts ===== -->
+<div id="modal" class="hidden fixed inset-0 z-50 bg-black/70 flex items-end sm:items-center justify-center" data-a="modalBg">
+  <div id="modalPanel" class="pop w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl bg-ink-800 border border-ink-600 p-5 pb-[max(env(safe-area-inset-bottom),20px)]"></div>
+</div>
+<div id="toasts" class="fixed top-3 inset-x-3 z-[60] flex flex-col items-center gap-2 pointer-events-none"></div>
+<input id="importFile" type="file" accept="application/json,.json" class="hidden">
+
+<script>
+/* ==================================================================
+   1. UTILITAIRES
+   ================================================================== */
+const KEY = 'fittrack_v1';
+const $ = id => document.getElementById(id);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = v => { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? 0 : n; };
+const r0 = n => Math.round(n || 0);
+const r1 = n => Math.round((n || 0) * 10) / 10;
+const fr = (n, d = 1) => (+n || 0).toLocaleString('fr-FR', { maximumFractionDigits: d });
+const fmtKg = v => (v === '' || v == null) ? '–' : fr(v, 2);
+const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const toDate = iso => new Date(iso + 'T12:00:00');
+const addDays = (iso, n) => { const d = toDate(iso); d.setDate(d.getDate() + n); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const daysBetween = (a, b) => Math.round((toDate(b) - toDate(a)) / 864e5);
+const fmtShort = iso => toDate(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+const fmtMed = iso => toDate(iso).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+const fmtLong = iso => toDate(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+const weekStart = iso => { const d = toDate(iso); const wd = (d.getDay() + 6) % 7; return addDays(iso, -wd); };
+const mmss = s => { s = Math.max(0, Math.ceil(s)); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); };
+const ago = n => n === 0 ? "aujourd'hui" : n === 1 ? 'hier' : `il y a ${n} j`;
+const ic = (name, cls = 'w-5 h-5') => `<i data-lucide="${name}" class="${cls}"></i>`;
+const typeLabel = t => t === 'upper' ? 'Upper' : 'Lower';
+const typeSub = t => t === 'upper' ? 'Haut du corps' : 'Bas du corps';
+const MAC = { p: '#2dd4bf', f: '#fbbf24', c: '#a78bfa', k: '#4da3ff' };
+
+function icons() { try { window.lucide && lucide.createIcons(); } catch (e) {} }
+
+function toast(msg, type = 'ok') {
+  const el = document.createElement('div');
+  const c = type === 'err' ? 'border-red-400/50 text-red-200' : 'border-arc/40 text-slate-100';
+  el.className = `pop pointer-events-auto max-w-md w-full sm:w-auto rounded-xl border ${c} bg-ink-800 shadow-xl px-4 py-3 text-sm font-medium`;
+  el.textContent = msg;
+  $('toasts').appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = 0; setTimeout(() => el.remove(), 300); }, 2600);
+}
+
+function openModal(html) { $('modalPanel').innerHTML = html; $('modal').classList.remove('hidden'); document.body.style.overflow = 'hidden'; icons(); }
+function closeModal() { $('modal').classList.add('hidden'); document.body.style.overflow = ''; DRAFT = null; TP.on = false; }
+
+/* ---- Son, vibration, écran allumé ---- */
+let AC = null;
+function audio() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function beep(freq = 880, dur = .15, when = 0, vol = .3) {
+  if (!D.settings.sound) return;
+  const ac = audio(); if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = 'square'; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, ac.currentTime + when);
+  g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + when + dur);
+  o.connect(g).connect(ac.destination);
+  o.start(ac.currentTime + when); o.stop(ac.currentTime + when + dur + .02);
+}
+function alarm() { [0, .25, .5].forEach(t => beep(1046, .18, t, .4)); try { navigator.vibrate && navigator.vibrate([300, 120, 300, 120, 300]); } catch (e) {} }
+let WL = null;
+async function keepAwake(on) {
+  try {
+    if (on && 'wakeLock' in navigator && !WL) { WL = await navigator.wakeLock.request('screen'); WL.addEventListener('release', () => WL = null); }
+    else if (!on && WL) { await WL.release(); WL = null; }
+  } catch (e) {}
+}
+
+/* ==================================================================
+   2. DONNÉES PAR DÉFAUT & PERSISTANCE (localStorage)
+   ================================================================== */
+const ex = (name, sets, repMin, repMax, inc, secondary, rest, tempo) => ({ id: uid(), name, sets, repMin, repMax, inc, secondary, rest, tempo: tempo || (secondary ? '2-0-1-1' : '3-1-1-0') });
+const food = (name, kcal, p, f, c) => ({ name, kcal, p, f, c });
+const ing = (f, qty) => ({ ...f, qty });
+
+function defaultData() {
+  const F = {
+    poulet: food('Blanc de poulet cru', 110, 23, 1.5, 0),
+    riz: food('Riz basmati cru', 350, 8, 1, 77),
+    pates: food('Pâtes complètes crues', 350, 13, 2.5, 66),
+    avoine: food("Flocons d'avoine", 370, 13, 7, 59),
+    patate: food('Patate douce crue', 86, 1.6, 0.1, 20),
+    boeuf: food('Bœuf haché 5% cru', 125, 21, 5, 0),
+    oeuf: food('Œuf entier (≈60 g)', 143, 12.5, 10, 0.7),
+    skyr: food('Skyr nature', 63, 11, 0.2, 4),
+    whey: food('Whey protéine', 380, 78, 6, 6),
+    huile: food("Huile d'olive", 900, 0, 100, 0),
+    brocoli: food('Brocoli', 34, 2.8, 0.4, 7),
+    banane: food('Banane', 89, 1.1, 0.3, 23),
+    amandes: food('Amandes', 600, 21, 50, 7),
+    lentilles: food('Lentilles corail crues', 340, 24, 1.5, 50),
+    fblanc: food('Fromage blanc 0%', 46, 7.5, 0.2, 4),
+    thon: food('Thon au naturel', 115, 26, 1, 0),
+    tomates: food('Tomates concassées', 25, 1.2, 0.2, 4),
+    oignon: food('Oignon', 40, 1.1, 0.1, 9),
+    pain: food('Pain complet', 250, 9, 3, 45),
+    lait: food('Lait demi-écrémé', 46, 3.2, 1.6, 4.8),
+  };
+  return {
+    version: 1,
+    settings: { kcal: 2616, p: 181, f: 78, c: 296, runBonus: 200, rest: 120, sound: true },
+    program: {
+      upper: [
+        ex('Développé couché', 3, 6, 10, 2.5, false, 150),
+        ex('Rowing barre', 3, 8, 12, 2.5, false, 120),
+        ex('Développé militaire haltères', 3, 8, 12, 2, false, 120),
+        ex('Tirage vertical', 3, 10, 12, 2.5, false, 90),
+        ex('Élévations latérales', 3, 12, 15, 1, true, 60),
+        ex('Curl haltères', 2, 10, 12, 1, true, 60),
+        ex('Extension triceps poulie', 2, 10, 12, 2.5, true, 60),
+      ],
+      lower: [
+        ex('Presse à cuisses', 3, 8, 12, 5, false, 150),
+        ex('Soulevé de terre roumain', 3, 8, 10, 2.5, false, 150),
+        ex('Fentes bulgares', 3, 8, 12, 2, false, 90),
+        ex('Leg curl', 3, 10, 15, 2.5, false, 90),
+        ex('Mollets debout', 3, 12, 15, 2.5, true, 60),
+        ex('Crunch à la poulie', 3, 12, 15, 2.5, true, 60),
+      ],
+    },
+    next: 'upper', sessions: [], active: null,
+    foods: Object.values(F),
+    recipes: [
+      { id: uid(), name: 'Poulet · riz · brocoli', cat: 'Meal prep', portions: 5,
+        ingredients: [ing(F.poulet, 900), ing(F.riz, 400), ing(F.brocoli, 750), ing(F.huile, 30)] },
+      { id: uid(), name: 'Bolognaise bœuf & pâtes complètes', cat: 'Meal prep', portions: 5,
+        ingredients: [ing(F.boeuf, 750), ing(F.pates, 450), ing(F.tomates, 800), ing(F.oignon, 150), ing(F.huile, 15)] },
+      { id: uid(), name: 'Overnight oats protéinés', cat: 'Collation', portions: 1,
+        ingredients: [ing(F.avoine, 60), ing(F.skyr, 150), ing(F.whey, 30), ing(F.banane, 100)] },
+    ],
+    quick: [
+      { id: uid(), name: 'Shaker whey + 300 ml lait', kcal: 252, p: 33, f: 6.6, c: 16 },
+      { id: uid(), name: '3 œufs + 2 tranches pain complet', kcal: 457, p: 31, f: 21, c: 37 },
+    ],
+    meals: {}, runDays: {}, plan: {}, shopChecked: {}, shopExtra: [],
+    weights: [], runs: [], mobility: [],
+  };
+}
+
+function migrate(d) {
+  const def = defaultData();
+  for (const k in def) if (d[k] === undefined) d[k] = def[k];
+  d.settings = { ...def.settings, ...d.settings };
+  d.program = { upper: d.program.upper || [], lower: d.program.lower || [] };
+  ['upper', 'lower'].forEach(t => d.program[t].forEach(e => { if (!e.tempo) e.tempo = e.secondary ? '2-0-1-1' : '3-1-1-0'; }));
+  return d;
+}
+function load() {
+  try { const raw = localStorage.getItem(KEY); if (raw) return migrate(JSON.parse(raw)); } catch (e) { console.warn(e); }
+  return defaultData();
+}
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(D)); }
+  catch (e) { toast('Impossible de sauvegarder (stockage plein ?)', 'err'); }
+}
+function save() { D.updatedAt = Date.now(); persist(); syncSchedule(); }
+let D = load();
+
+/* ==================================================================
+   2b. SYNCHRONISATION TÉLÉPHONE ↔ ORDINATEUR (via un Gist GitHub privé)
+   - Le "code d'accès" GitHub reste dans CE navigateur uniquement (jamais exporté).
+   - Les données sont envoyées automatiquement après chaque modification
+     et récupérées au lancement, au retour sur l'onglet, puis toutes les 45 s.
+   - En cas de conflit, la modification la plus récente l'emporte.
+   ================================================================== */
+const SKEY = 'bluearc_sync', GFILE = 'bluearc-data.json';
+function loadSync() { try { return JSON.parse(localStorage.getItem(SKEY)) || {}; } catch (e) { return {}; } }
+function saveSync() { try { localStorage.setItem(SKEY, JSON.stringify(SYNC)); } catch (e) {} }
+let SYNC = loadSync();
+const SY = { busy: false, pending: false, timer: null, status: 'idle', msg: '' };
+
+async function gh(path, opts = {}) {
+  const r = await fetch('https://api.github.com' + path, {
+    ...opts, cache: 'no-store',
+    headers: { Authorization: 'Bearer ' + SYNC.token, Accept: 'application/vnd.github+json', ...(opts.body ? { 'Content-Type': 'application/json' } : {}) },
+  });
+  if (!r.ok) { const e = new Error('GitHub ' + r.status); e.status = r.status; throw e; }
+  return r.json();
+}
+async function fetchRemote(id) {
+  const g = await gh('/gists/' + id), f = g.files && g.files[GFILE];
+  if (!f) return null;
+  let txt = f.content;
+  if (f.truncated || txt == null) txt = await (await fetch(f.raw_url, { cache: 'no-store' })).text();
+  try { return JSON.parse(txt); } catch (e) { return null; }
+}
+async function pushRemote() {
+  await gh('/gists/' + SYNC.gistId, { method: 'PATCH', body: JSON.stringify({ files: { [GFILE]: { content: JSON.stringify(D) } } }) });
+}
+function applyRemote(remote) { D = migrate(remote); persist(); stopRest(); render(); }
+function syncErr(e) { return e.status === 401 ? "Code d'accès refusé (expiré ou supprimé ?)" : e.status === 404 ? 'Espace de sauvegarde introuvable' : 'Hors ligne ou GitHub indisponible'; }
+function setStatus(st, msg) { SY.status = st; SY.msg = msg || ''; paintSync(); }
+function paintSync() {
+  const el = $('syncStatus'); if (!el) return;
+  let t = 'En attente', c = 'text-slate-400';
+  if (SY.status === 'syncing') { t = 'Synchronisation…'; c = 'text-slate-300'; }
+  else if (SY.status === 'err') { t = '⚠ ' + SY.msg; c = 'text-orange-300'; }
+  else if (SYNC.last) { t = '✓ Synchronisé à ' + new Date(SYNC.last).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); c = 'text-arc'; }
+  el.textContent = t; el.className = 'mt-3 text-sm font-semibold ' + c;
+}
+function syncSchedule() {
+  if (!SYNC.token || !SYNC.gistId) return;
+  clearTimeout(SY.timer);
+  SY.timer = setTimeout(() => { if (SY.busy) SY.pending = true; else syncNow(); }, 2500);
+}
+async function syncNow(manual) {
+  if (!SYNC.token || !SYNC.gistId) return;
+  if (SY.busy) { if (manual) toast('Synchronisation en cours…'); return; }
+  SY.busy = true; setStatus('syncing');
+  try {
+    const remote = await fetchRemote(SYNC.gistId), ru = (remote && remote.updatedAt) || 0, lu = D.updatedAt || 0;
+    if (ru > lu) {
+      const typing = /^(INPUT|SELECT|TEXTAREA)$/.test((document.activeElement || {}).tagName || '');
+      if (typing && !manual) { /* l'utilisateur saisit : on réessaiera au prochain passage */ }
+      else { applyRemote(remote); if (manual) toast('Données mises à jour depuis le cloud ✅'); }
+    } else if (lu > ru) { await pushRemote(); if (manual) toast('Données envoyées ✅'); }
+    else if (manual) toast('Déjà à jour ✅');
+    SYNC.last = Date.now(); saveSync(); setStatus('ok');
+  } catch (e) { setStatus('err', syncErr(e)); if (manual) toast(SY.msg, 'err'); }
+  finally { SY.busy = false; if (SY.pending) { SY.pending = false; syncSchedule(); } }
+}
+async function syncConnect(token) {
+  SYNC = { token }; SY.busy = true; setStatus('syncing');
+  try {
+    let found = null;
+    for (let page = 1; page <= 5 && !found; page++) {
+      const list = await gh(`/gists?per_page=100&page=${page}`);
+      found = list.find(g => g.files && g.files[GFILE]);
+      if (list.length < 100) break;
+    }
+    if (found) {
+      SYNC.gistId = found.id;
+      const remote = await fetchRemote(found.id), localHas = (D.updatedAt || 0) > 0;
+      if (remote && (!localHas || confirm("Des données existent déjà dans le cloud.\n\nOK = récupérer celles du cloud (remplace les données de cet appareil)\nAnnuler = envoyer celles de cet appareil dans le cloud"))) {
+        applyRemote(remote); toast('Données récupérées depuis le cloud ✅');
+      } else { D.updatedAt = Date.now(); persist(); await pushRemote(); toast('Données envoyées dans le cloud ✅'); }
+    } else {
+      D.updatedAt = Date.now(); persist();
+      const g = await gh('/gists', { method: 'POST', body: JSON.stringify({ description: 'BlueArc — données de suivi', public: false, files: { [GFILE]: { content: JSON.stringify(D) } } }) });
+      SYNC.gistId = g.id; toast('Synchronisation activée ✅');
+    }
+    SYNC.last = Date.now(); saveSync(); setStatus('ok');
+  } catch (e) { SYNC = {}; saveSync(); setStatus('err', syncErr(e)); toast(SY.msg, 'err'); }
+  finally { SY.busy = false; }
+}
+function syncCard() {
+  const on = !!(SYNC.token && SYNC.gistId);
+  return `<section class="card lg:col-span-2">
+    <h3 class="font-bold mb-1 flex items-center gap-2">${ic('cloud', 'w-5 h-5 text-arc')} Synchronisation téléphone ↔ ordinateur</h3>
+    ${on ? `<p class="text-sm text-slate-400">Tes données sont enregistrées automatiquement dans un espace privé de ton compte GitHub et retrouvées sur chaque appareil connecté.</p>
+      <p id="syncStatus" class="mt-3 text-sm font-semibold"></p>
+      <div class="grid sm:grid-cols-2 gap-2 mt-3">
+        <button class="btn btn-primary" data-a="syncNow">${ic('refresh-cw')} Synchroniser maintenant</button>
+        <button class="btn btn-danger" data-a="syncOff">${ic('log-out')} Déconnecter cet appareil</button></div>`
+    : `<p class="text-sm text-slate-400">Retrouve les mêmes données sur ton téléphone et ton ordinateur. À faire <b class="text-slate-200">une fois sur chaque appareil</b>, avec le même code :</p>
+      <ol class="text-sm text-slate-300 mt-3 space-y-1.5 list-decimal pl-5">
+        <li>Appuie sur le bouton bleu ci-dessous (connecte-toi à GitHub si besoin).</li>
+        <li>Mets « Expiration » sur <b>No expiration</b>, descends et appuie sur <b>Generate token</b>.</li>
+        <li>Copie le code qui commence par <code class="text-arc">ghp_</code> et colle-le ici.</li>
+      </ol>
+      <a href="https://github.com/settings/tokens/new?scopes=gist&description=BlueArc" target="_blank" rel="noopener" class="btn btn-ghost w-full mt-3">${ic('key-round', 'w-4 h-4')} Créer mon code d'accès GitHub</a>
+      <input id="sy_token" type="password" autocomplete="off" class="inp mt-2" placeholder="Colle ton code ici (ghp_…)">
+      <button class="btn btn-primary w-full mt-2" data-a="syncOn">${ic('cloud-upload')} Activer la synchronisation</button>
+      <p id="syncStatus" class="mt-3 text-sm font-semibold"></p>
+      <p class="text-xs text-slate-500 mt-1">Le code donne uniquement le droit « gist » (fichiers de sauvegarde). Il reste dans ce navigateur et n'est jamais exporté. Traite-le comme un mot de passe.</p>`}
+  </section>`;
+}
+
+/* État d'interface (non persistant) */
+const UI = { view: 'dash', nutriSub: 'day', trackSub: 'weight', nutriDate: todayISO(), addTab: 'recipe', progType: 'upper', wRange: 90 };
+let DRAFT = null;   // recette en cours d'édition
+const CH = {};      // instances Chart.js
+
+/* ==================================================================
+   3. LOGIQUE ENTRAÎNEMENT (rotation, double progression)
+   ================================================================== */
+function lastPerf(exId) {
+  for (let i = D.sessions.length - 1; i >= 0; i--) {
+    const e = D.sessions[i].exercises.find(x => x.exId === exId && !x.skipped && x.sets.length);
+    if (e) return { date: D.sessions[i].date, sets: e.sets };
+  }
+  return null;
+}
+
+/* Double progression : on monte les reps jusqu'au haut de la fourchette sur toutes les séries,
+   puis on augmente la charge et on repart en bas de fourchette. */
+function suggest(p, prev) {
+  if (!prev) return { kg: '', reps: p.repMin, type: 'new', text: `Première fois : choisis une charge pour ${p.repMin}-${p.repMax} reps à RPE 7-8.` };
+  const top = Math.max(...prev.sets.map(s => +s.kg || 0));
+  const atTop = prev.sets.filter(s => (+s.kg || 0) === top);
+  const maxRpe = Math.max(0, ...prev.sets.map(s => +s.rpe || 0));
+  const allMax = prev.sets.length >= p.sets && atTop.length === prev.sets.length && prev.sets.every(s => +s.reps >= p.repMax);
+  if (allMax && maxRpe <= 9) {
+    const kg = Math.round((top + p.inc) * 100) / 100;
+    return { kg, reps: p.repMin, type: 'up', text: `Haut de fourchette atteint → monte à ${fmtKg(kg)} kg (+${fmtKg(p.inc)}) et repars à ${p.repMin} reps.` };
+  }
+  if (allMax) return { kg: top, reps: p.repMax, type: 'hold', text: `Reps max atteintes mais RPE ${maxRpe} : consolide ${fmtKg(top)} kg avant de monter.` };
+  const setReps = Array.from({ length: p.sets }, (_, j) => { const s = atTop[j] || atTop[atTop.length - 1]; return Math.min(p.repMax, (+s?.reps || p.repMin) + 1); });
+  return { kg: top, reps: setReps[0], setReps, type: 'reps', text: `Même charge (${fmtKg(top)} kg), ajoute 1 rep par série jusqu'à ${p.repMax}.` };
+}
+
+function startSession(type) {
+  const prog = D.program[type];
+  if (!prog.length) return toast('Programme vide : ajoute des exercices dans Réglages', 'err');
+  audio();
+  D.active = {
+    id: uid(), type, date: todayISO(), start: Date.now(), express: false,
+    exercises: prog.map(p => {
+      const prev = lastPerf(p.id), sg = suggest(p, prev);
+      return {
+        exId: p.id, name: p.name, repMin: p.repMin, repMax: p.repMax, inc: p.inc, rest: p.rest, secondary: p.secondary, tempo: p.tempo,
+        skipped: false, prev, sugg: sg,
+        sets: Array.from({ length: p.sets }, (_, j) => ({ kg: sg.kg ?? '', reps: sg.setReps?.[j] ?? sg.reps ?? '', rpe: '', done: false })),
+      };
+    }),
+  };
+  save(); keepAwake(true); render(); window.scrollTo(0, 0);
+  toast(`Séance ${typeLabel(type)} lancée — bon courage !`);
+}
+
+function finishSession() {
+  const A = D.active; if (!A) return;
+  const done = A.exercises.reduce((s, e) => s + e.sets.filter(x => x.done).length, 0);
+  if (!done) { if (confirm('Aucune série validée. Abandonner la séance ?')) cancelSession(true); return; }
+  if (!confirm('Terminer et enregistrer la séance ?')) return;
+  D.sessions.push({
+    id: A.id, date: A.date, type: A.type, start: A.start, end: Date.now(), express: A.express,
+    exercises: A.exercises.map(e => ({
+      exId: e.exId, name: e.name, tempo: e.tempo, skipped: e.skipped || !e.sets.some(s => s.done),
+      sets: e.sets.filter(s => s.done).map(s => ({ kg: num(s.kg), reps: num(s.reps), rpe: s.rpe === '' ? null : num(s.rpe) })),
+    })),
+  });
+  D.next = A.type === 'upper' ? 'lower' : 'upper';
+  D.active = null; save(); stopRest(); keepAwake(false); render(); window.scrollTo(0, 0);
+  toast(`Séance enregistrée 💪 Prochaine : ${typeLabel(D.next)}`);
+}
+function cancelSession(force) {
+  if (!force && !confirm('Abandonner la séance en cours ? Les séries saisies seront perdues.')) return;
+  D.active = null; save(); stopRest(); keepAwake(false); render();
+}
+const sessionVolume = s => s.exercises.reduce((t, e) => t + e.sets.reduce((a, x) => a + x.kg * x.reps, 0), 0);
+const sessionSets = s => s.exercises.reduce((t, e) => t + e.sets.length, 0);
+
+/* ---- Chronomètre de repos ---- */
+const REST = { on: false, end: 0, total: 0, warned: false };
+function startRest(sec) {
+  REST.on = true; REST.total = sec; REST.end = Date.now() + sec * 1000; REST.warned = false;
+  $('restBar').classList.remove('hidden', 'flash'); $('restLabel').textContent = 'Repos';
+  tick();
+}
+function addRest(s) {
+  if (!REST.on) { if (s > 0) startRest(s); return; }
+  REST.end += s * 1000; REST.total = Math.max(REST.total + s, 1);
+  if (s > 0) REST.warned = false; tick();
+}
+function stopRest() { REST.on = false; $('restBar').classList.add('hidden'); }
+
+/* ==================================================================
+   3b. GUIDE TEMPO (rythme de chaque répétition : descente-bas-montée-haut)
+   ================================================================== */
+const PH_NAME = ['Descends', 'Pause en bas', 'Monte', 'Pause en haut'];
+const PH_SHORT = ['Descente', 'Bas', 'Montée', 'Haut'];
+const PH_COL = ['#fbbf24', '#a78bfa', '#4da3ff', '#2dd4bf'];
+const PH_HZ = [520, 392, 880, 988];
+function parseTempo(t) {
+  const a = String(t || '').split(/[^0-9]+/).filter(Boolean).map(Number);
+  if (!a.length) return [3, 1, 1, 0];
+  while (a.length < 4) a.push(0);
+  return a.slice(0, 4).map(n => Math.min(10, n));
+}
+const tempoStr = t => parseTempo(t).join('-');
+const TP = { on: false, done: false, i: 0, tempo: [3, 1, 1, 0], reps: 10, rep: 1, phase: -1, end: 0, left: 0, lastSec: -1 };
+
+function openTempo(i) {
+  if (!D.active) return;
+  const e = D.active.exercises[i], s = e.sets.find(x => !x.done) || e.sets[0] || {};
+  Object.assign(TP, { on: false, done: false, i, tempo: parseTempo(e.tempo), reps: Math.max(1, Math.round(num(s.reps)) || e.repMax || 10) });
+  renderTempo();
+}
+function saveTempo() {
+  const e = D.active.exercises[TP.i], t = TP.tempo.join('-');
+  e.tempo = t;
+  const p = D.program[D.active.type].find(x => x.id === e.exId);
+  if (p) p.tempo = t;
+  save();
+}
+function tpStart() {
+  if (TP.tempo.reduce((a, b) => a + b, 0) <= 0) return toast('Mets au moins une phase à 1 s', 'err');
+  audio();
+  Object.assign(TP, { on: true, done: false, rep: 1, phase: -1, end: Date.now() + 3000, left: 3, lastSec: 3 });
+  renderTempo();
+}
+function tpAdvance() {
+  let ph = TP.phase, rep = TP.rep;
+  for (let n = 0; n < 6; n++) {
+    ph++; if (ph > 3) { ph = 0; rep++; }
+    if (rep > TP.reps || TP.tempo[ph] > 0) break;
+  }
+  if (rep > TP.reps) { TP.on = false; TP.done = true; alarm(); renderTempo(); return; }
+  TP.phase = ph; TP.rep = rep; TP.end = Date.now() + TP.tempo[ph] * 1000; TP.left = TP.tempo[ph]; TP.lastSec = TP.tempo[ph];
+  beep(PH_HZ[ph], .14, 0, .35);
+  try { navigator.vibrate && navigator.vibrate(ph === 0 || ph === 2 ? 40 : 15); } catch (e) {}
+  tpUI();
+}
+function tpTick(now) {
+  TP.left = (TP.end - now) / 1000;
+  if (TP.left <= 0) return tpAdvance();
+  const sec = Math.ceil(TP.left);
+  if (sec !== TP.lastSec) { TP.lastSec = sec; beep(1250, .05, 0, .12); }
+  tpUI();
+}
+function tpUI() {
+  if (!$('tpTime')) return;
+  if (!TP.on) {
+    $('tpPhase').textContent = TP.done ? 'Série terminée !' : 'Prêt ?';
+    $('tpPhase').style.color = TP.done ? '#4da3ff' : '#cbd5e1';
+    $('tpTime').textContent = TP.done ? '✓' : TP.tempo.join('-');
+    $('tpBar').style.width = TP.done ? '100%' : '0%';
+    $('tpRep').textContent = TP.done ? `${TP.reps} reps réalisées` : `${TP.reps} reps`;
+    return;
+  }
+  const col = TP.phase < 0 ? '#cbd5e1' : PH_COL[TP.phase], total = TP.phase < 0 ? 3 : TP.tempo[TP.phase];
+  $('tpPhase').textContent = TP.phase < 0 ? 'Prépare-toi' : PH_NAME[TP.phase];
+  $('tpPhase').style.color = col;
+  $('tpTime').textContent = Math.max(1, Math.ceil(TP.left));
+  $('tpBar').style.width = Math.max(0, Math.min(100, TP.left / total * 100)) + '%';
+  $('tpBar').style.background = col;
+  $('tpRep').textContent = TP.phase < 0 ? `${TP.reps} reps` : `Rep ${Math.min(TP.rep, TP.reps)} / ${TP.reps}`;
+}
+function renderTempo() {
+  const e = D.active.exercises[TP.i], run = TP.on, dur = TP.tempo.reduce((a, b) => a + b, 0) * TP.reps;
+  const stepper = (k, v) => `<div class="rounded-xl bg-ink-700/60 p-2 text-center">
+      <p class="text-[10px] uppercase tracking-wider font-bold" style="color:${PH_COL[k]}">${PH_SHORT[k]}</p>
+      <p class="font-display text-3xl font-bold tabular-nums my-1">${v}<span class="text-sm text-slate-500"> s</span></p>
+      <div class="grid grid-cols-2 gap-1">
+        <button class="btn btn-sm btn-ghost !px-0" data-a="tpAdj" data-k="${k}" data-v="-1" ${run ? 'disabled' : ''} aria-label="Moins">${ic('minus', 'w-4 h-4')}</button>
+        <button class="btn btn-sm btn-ghost !px-0" data-a="tpAdj" data-k="${k}" data-v="1" ${run ? 'disabled' : ''} aria-label="Plus">${ic('plus', 'w-4 h-4')}</button></div></div>`;
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><p class="text-xs uppercase tracking-wider text-slate-400">Guide tempo</p><h2 class="h-title leading-tight">${esc(e.name)}</h2></div>
+      <button class="btn btn-sm btn-ghost" data-a="closeModal" aria-label="Fermer">${ic('x', 'w-4 h-4')}</button></div>
+    <div class="grid grid-cols-4 gap-2">${TP.tempo.map((v, k) => stepper(k, v)).join('')}</div>
+    <div class="flex items-center justify-between mt-3 rounded-xl bg-ink-700/60 p-2">
+      <span class="text-sm text-slate-300 pl-2">Répétitions</span>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-sm btn-ghost !px-3" data-a="tpReps" data-v="-1" ${run ? 'disabled' : ''}>${ic('minus', 'w-4 h-4')}</button>
+        <span class="font-display text-2xl font-bold w-8 text-center tabular-nums">${TP.reps}</span>
+        <button class="btn btn-sm btn-ghost !px-3" data-a="tpReps" data-v="1" ${run ? 'disabled' : ''}>${ic('plus', 'w-4 h-4')}</button></div></div>
+    <p class="text-xs text-slate-500 mt-2">Série ≈ ${mmss(dur)} sous tension. Le tempo est enregistré automatiquement pour cet exercice.</p>
+    <div class="mt-4 rounded-2xl border border-ink-600 bg-ink-900/60 p-5 text-center">
+      <p id="tpPhase" class="text-sm font-bold uppercase tracking-widest"></p>
+      <p id="tpTime" class="font-display text-7xl font-extrabold tabular-nums leading-none my-3"></p>
+      <div class="h-2 rounded-full bg-ink-600 overflow-hidden"><div id="tpBar" class="h-full rounded-full" style="width:0%;background:#4da3ff"></div></div>
+      <p id="tpRep" class="mt-3 text-slate-300 font-semibold tabular-nums"></p></div>
+    <div class="grid grid-cols-2 gap-2 mt-4">
+      ${run ? `<button class="btn btn-danger h-14 col-span-2" data-a="tpStop">${ic('square', 'w-4 h-4')} Arrêter</button>`
+            : `<button class="btn btn-ghost h-14" data-a="closeModal">Fermer</button><button class="btn btn-primary h-14" data-a="tpStart">${ic('play')} ${TP.done ? 'Recommencer' : 'Démarrer'}</button>`}
+    </div>
+    <p class="text-xs text-slate-500 mt-3">Bip grave = descente · bip aigu = montée. Lis « 3-1-1-0 » ainsi : 3 s de descente, 1 s de pause en bas, 1 s de montée, 0 s en haut.</p>`);
+  tpUI();
+}
+
+/* ==================================================================
+   4. LOGIQUE NUTRITION
+   ================================================================== */
+function isRunDay(date) { return D.runDays[date] !== undefined ? D.runDays[date] : D.runs.some(r => r.date === date); }
+function targetsFor(date) {
+  const s = D.settings, run = isRunDay(date), b = run ? num(s.runBonus) : 0;
+  return { kcal: num(s.kcal) + b, p: num(s.p), f: num(s.f), c: num(s.c) + b / 4, run, bonus: b };
+}
+function dayTotals(date) {
+  return (D.meals[date] || []).reduce((t, m) => ({ kcal: t.kcal + num(m.kcal), p: t.p + num(m.p), f: t.f + num(m.f), c: t.c + num(m.c) }), { kcal: 0, p: 0, f: 0, c: 0 });
+}
+function addMeal(date, m) { (D.meals[date] = D.meals[date] || []).push({ id: uid(), time: Date.now(), ...m }); save(); }
+function recipeTotals(r) {
+  const t = { kcal: 0, p: 0, f: 0, c: 0 };
+  (r.ingredients || []).forEach(i => { const k = num(i.qty) / 100; t.kcal += num(i.kcal) * k; t.p += num(i.p) * k; t.f += num(i.f) * k; t.c += num(i.c) * k; });
+  const n = Math.max(1, num(r.portions) || 1);
+  return { total: t, per: { kcal: t.kcal / n, p: t.p / n, f: t.f / n, c: t.c / n } };
+}
+function shoppingList() {
+  const map = {};
+  for (const [rid, n] of Object.entries(D.plan)) {
+    if (!n) continue;
+    const r = D.recipes.find(x => x.id === rid); if (!r) continue;
+    r.ingredients.forEach(i => {
+      const k = (i.name || '').trim().toLowerCase(); if (!k) return;
+      map[k] = map[k] || { key: k, name: i.name.trim(), qty: 0, from: new Set() };
+      map[k].qty += num(i.qty) * n; map[k].from.add(r.name);
+    });
+  }
+  return Object.values(map).sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+}
+const fmtQty = g => g >= 1000 ? fr(g / 1000, 2) + ' kg' : r0(g) + ' g';
+
+/* ==================================================================
+   5. LOGIQUE POIDS / COURSE / MOBILITÉ
+   ================================================================== */
+function weightSeries() {
+  const w = [...D.weights].sort((a, b) => a.date.localeCompare(b.date));
+  return w.map(x => {
+    const win = w.filter(y => { const d = daysBetween(y.date, x.date); return d >= 0 && d < 7; });
+    return { ...x, avg: win.reduce((s, y) => s + y.kg, 0) / win.length };
+  });
+}
+function weightStats() {
+  const s = weightSeries(); if (!s.length) return null;
+  const last = s[s.length - 1];
+  const prevRef = addDays(last.date, -7);
+  const prev = [...s].reverse().find(x => x.date <= prevRef);
+  return { last, avg: last.avg, delta: prev ? last.avg - prev.avg : null };
+}
+const pace = (min, km) => km > 0 ? mmss(min * 60 / km) + ' /km' : '–';
+function runsInRange(from, to) { return D.runs.filter(r => r.date >= from && r.date <= to); }
+const KNEE = ['Aucun', 'Léger', 'Modéré', 'Fort'];
+const KNEE_C = ['bg-emerald-500/15 text-emerald-300', 'bg-amber-400/15 text-amber-300', 'bg-orange-500/20 text-orange-300', 'bg-red-500/20 text-red-300'];
+const FEEL = ['', '😫', '😕', '😐', '🙂', '🤩'];
+
+const MOBILITY = [
+  { name: 'Ischio-jambiers — jambe gauche', dur: 45, desc: 'Talon posé sur un support bas, jambe tendue, dos plat. Bascule le bassin vers l\'avant sans arrondir le dos. Respire lentement.' },
+  { name: 'Ischio-jambiers — jambe droite', dur: 45, desc: 'Même position de l\'autre côté. Cherche une tension modérée (4/10), jamais de douleur.' },
+  { name: 'Papillon', dur: 60, desc: 'Assis, plantes des pieds jointes, talons proches du bassin. Dos droit, laisse les genoux descendre ; les coudes peuvent appuyer doucement.' },
+  { name: 'Pigeon — côté gauche', dur: 60, desc: 'Jambe avant pliée devant toi, jambe arrière tendue, bassin face au sol. Genou sensible ? Fais la version allongée sur le dos (figure 4).' },
+  { name: 'Pigeon — côté droit', dur: 60, desc: 'Même position de l\'autre côté. Expire en descendant le buste progressivement.' },
+  { name: 'Mollets — gauche', dur: 45, desc: 'Mains au mur, jambe arrière tendue, talon au sol. Sur la fin, fléchis légèrement le genou pour cibler le soléaire.' },
+  { name: 'Mollets — droite', dur: 45, desc: 'Même position de l\'autre côté. Pousse le talon vers le sol.' },
+];
+const MOB = { on: false, idx: 0, phase: 'prep', end: 0, left: 0, paused: false, scale: 1 };
+const PREP = 5;
+function mobDur(i) { return Math.round(MOBILITY[i].dur * MOB.scale); }
+function mobStart() { audio(); Object.assign(MOB, { on: true, idx: 0, paused: false }); mobPhase('prep'); keepAwake(true); render(); }
+function mobPhase(ph) { MOB.phase = ph; const s = ph === 'prep' ? PREP : mobDur(MOB.idx); MOB.end = Date.now() + s * 1000; MOB.left = s; }
+function mobGoto(i) {
+  if (i >= MOBILITY.length) return mobFinish();
+  MOB.idx = Math.max(0, i); MOB.paused = false; mobPhase('prep'); render();
+}
+function mobFinish() {
+  MOB.on = false; MOB.phase = 'done'; keepAwake(false);
+  D.mobility.push({ date: todayISO(), at: Date.now() }); save(); alarm(); render();
+  toast('Routine de mobilité terminée ✅');
+}
+
+/* ==================================================================
+   6. BOUCLE D'HORLOGE (repos, mobilité, durée de séance)
+   ================================================================== */
+function tick() {
+  const now = Date.now();
+  if (TP.on) tpTick(now);
+  // Repos
+  if (REST.on) {
+    const left = (REST.end - now) / 1000;
+    $('restTime').textContent = mmss(left);
+    $('restProg').style.width = Math.max(0, Math.min(100, left / REST.total * 100)) + '%';
+    if (left <= 10 && left > 0 && !REST.warned) { REST.warned = true; beep(660, .12); }
+    if (left <= 0) {
+      REST.on = false; alarm();
+      $('restLabel').textContent = 'Repos terminé — série suivante !';
+      $('restTime').textContent = 'GO'; $('restBar').classList.add('flash');
+      setTimeout(() => { if (!REST.on) $('restBar').classList.add('hidden'); }, 4000);
+    }
+  }
+  // Durée de séance
+  if (D.active && $('elapsed')) $('elapsed').textContent = mmss((now - D.active.start) / 1000);
+  // Mobilité
+  if (MOB.on) {
+    if (MOB.paused) MOB.end = now + MOB.left * 1000;
+    else MOB.left = (MOB.end - now) / 1000;
+    const total = MOB.phase === 'prep' ? PREP : mobDur(MOB.idx);
+    if ($('mobTime')) {
+      $('mobTime').textContent = mmss(MOB.left);
+      const C = 2 * Math.PI * 88;
+      $('mobRing').style.strokeDashoffset = C * (1 - Math.max(0, MOB.left) / total);
+    }
+    if (!MOB.paused && MOB.phase === 'go' && MOB.left <= 3.05 && MOB.left > 0 && Math.abs(MOB.left - Math.round(MOB.left)) < .13) beep(660, .08);
+    if (!MOB.paused && MOB.left <= 0) {
+      if (MOB.phase === 'prep') { beep(1046, .25); mobPhase('go'); render(); }
+      else { alarm(); if (MOB.idx + 1 >= MOBILITY.length) mobFinish(); else { MOB.idx++; mobPhase('prep'); render(); } }
+    }
+  }
+}
+setInterval(tick, 250);
+
+/* ==================================================================
+   7. COMPOSANTS VISUELS
+   ================================================================== */
+function ring(val, target, { size = 140, stroke = 12, color = MAC.k, label = '', sub = '' } = {}) {
+  const r = (size - stroke) / 2, C = 2 * Math.PI * r, p = target > 0 ? Math.min(val / target, 1) : 0, over = val > target * 1.05;
+  return `<div class="relative shrink-0" style="width:${size}px;height:${size}px">
+    <svg width="${size}" height="${size}" class="-rotate-90">
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="#1f2f4a" stroke-width="${stroke}"/>
+      <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${over ? '#ff7a1a' : color}" stroke-width="${stroke}" stroke-linecap="round"
+        stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - p)}" style="transition:stroke-dashoffset .6s"/>
+    </svg>
+    <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+      <span class="font-display text-3xl font-bold leading-none tabular-nums">${label}</span>
+      <span class="text-[11px] text-slate-400 mt-1 leading-tight">${sub}</span>
+    </div></div>`;
+}
+function bar(label, val, target, color, unit = 'g') {
+  const p = target > 0 ? Math.min(val / target * 100, 100) : 0, over = val > target * 1.08;
+  return `<div>
+    <div class="flex justify-between text-sm mb-1"><span class="font-semibold" style="color:${color}">${label}</span>
+      <span class="tabular-nums text-slate-200">${r0(val)} <span class="text-slate-500">/ ${r0(target)} ${unit}</span></span></div>
+    <div class="h-2.5 rounded-full bg-ink-600 overflow-hidden"><div class="h-full rounded-full transition-all" style="width:${p}%;background:${over ? '#ff7a1a' : color}"></div></div>
+  </div>`;
+}
+const macroLine = m => `<span class="tabular-nums"><b class="text-white">${r0(m.kcal)}</b> kcal · <span style="color:${MAC.p}">P ${r0(m.p)}</span> · <span style="color:${MAC.f}">L ${r0(m.f)}</span> · <span style="color:${MAC.c}">G ${r0(m.c)}</span></span>`;
+const stat = (label, value, sub = '') => `<div class="rounded-xl bg-ink-700/60 p-3"><p class="text-[11px] uppercase tracking-wider text-slate-400">${label}</p><p class="font-display text-2xl font-bold tabular-nums">${value}</p>${sub ? `<p class="text-xs text-slate-400">${sub}</p>` : ''}</div>`;
+const tabs = (items, cur, action) => `<div class="flex gap-1 p-1 rounded-xl bg-ink-800 border border-ink-600/60 mb-4">${items.map(([v, l, i]) => `<button class="tab ${cur === v ? 'tab-on' : ''} inline-flex items-center justify-center gap-1.5" data-a="${action}" data-v="${v}">${i ? ic(i, 'w-4 h-4') : ''}${l}</button>`).join('')}</div>`;
+const pageTitle = (t, sub = '') => `<header class="mb-5">${sub ? `<p class="text-slate-400 text-sm first-letter:uppercase">${sub}</p>` : ''}<h1 class="h-title text-3xl lg:text-4xl">${t}</h1></header>`;
+
+/* ==================================================================
+   8. VUE : TABLEAU DE BORD
+   ================================================================== */
+function renderDash() {
+  const t = todayISO(), tg = targetsFor(t), tot = dayTotals(t);
+  const last = D.sessions[D.sessions.length - 1];
+  const ws = weightStats();
+  const wk = weekStart(t);
+  const wRuns = runsInRange(wk, t), km = wRuns.reduce((s, r) => s + num(r.distance), 0);
+  const wSess = D.sessions.filter(s => s.date >= wk).length;
+  const wMob = D.mobility.filter(m => m.date >= wk).length;
+  const lastRun = [...D.runs].sort((a, b) => b.date.localeCompare(a.date))[0];
+  const nxt = D.active ? D.active.type : D.next;
+  return `
+  ${pageTitle('Tableau de bord', fmtLong(t))}
+  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <section class="card relative overflow-hidden md:col-span-2 xl:col-span-1">
+      <div class="absolute -right-6 -top-6 w-36 h-36 rounded-full bg-arc/10"></div>
+      <p class="text-xs uppercase tracking-wider text-slate-400">${D.active ? 'Séance en cours' : 'Prochaine séance'}</p>
+      <h2 class="font-display text-5xl font-extrabold uppercase text-arc leading-none mt-1">${typeLabel(nxt)}</h2>
+      <p class="text-slate-300 text-sm">${typeSub(nxt)}</p>
+      <p class="text-sm text-slate-400 mt-3">${D.program[nxt].slice(0, 4).map(e => esc(e.name)).join(' · ')}${D.program[nxt].length > 4 ? '…' : ''}</p>
+      <p class="text-xs text-slate-500 mt-2">${last ? `Dernière : ${typeLabel(last.type)} ${ago(daysBetween(last.date, t))}` : 'Aucune séance enregistrée'}</p>
+      <a href="#seance" class="btn btn-primary w-full mt-4 text-lg">${ic(D.active ? 'play' : 'dumbbell')} ${D.active ? 'Reprendre la séance' : 'Démarrer'}</a>
+    </section>
+
+    <section class="card">
+      <div class="flex items-center justify-between mb-3"><h3 class="font-bold flex items-center gap-2">${ic('flame', 'w-5 h-5 text-flame')} Nutrition du jour</h3>${tg.run ? '<span class="chip bg-sky-400/15 text-sky-300">Jour de course</span>' : ''}</div>
+      <div class="flex items-center gap-4">
+        ${ring(tot.kcal, tg.kcal, { size: 120, label: r0(tot.kcal), sub: `/ ${r0(tg.kcal)} kcal` })}
+        <div class="flex-1 space-y-2.5">${bar('Protéines', tot.p, tg.p, MAC.p)}${bar('Lipides', tot.f, tg.f, MAC.f)}${bar('Glucides', tot.c, tg.c, MAC.c)}</div>
+      </div>
+      <a href="#nutrition" class="btn btn-ghost w-full mt-4">${ic('plus')} Ajouter un repas</a>
+    </section>
+
+    <section class="card">
+      <h3 class="font-bold flex items-center gap-2 mb-3">${ic('scale', 'w-5 h-5 text-sky-300')} Poids</h3>
+      ${ws ? `<div class="grid grid-cols-3 gap-2">
+        ${stat('Dernier', fr(ws.last.kg), fmtShort(ws.last.date))}
+        ${stat('Moy. 7 j', fr(ws.avg))}
+        ${stat('Δ 7 j', ws.delta == null ? '–' : (ws.delta > 0 ? '+' : '') + fr(ws.delta, 2))}
+      </div><div class="h-28 mt-3"><canvas id="dashW"></canvas></div>`
+      : '<p class="text-sm text-slate-400">Aucune pesée. Commence aujourd\'hui pour suivre ta tendance.</p>'}
+      <a href="#suivi" class="btn btn-ghost w-full mt-4" data-a="trackSub" data-v="weight">${ic('plus')} Saisir mon poids</a>
+    </section>
+
+    <section class="card">
+      <h3 class="font-bold flex items-center gap-2 mb-3">${ic('calendar-days', 'w-5 h-5 text-violet-300')} Cette semaine</h3>
+      <div class="grid grid-cols-3 gap-2">${stat('Séances', wSess)}${stat('Course', fr(km) + ' km', wRuns.length + ' sortie' + (wRuns.length > 1 ? 's' : ''))}${stat('Mobilité', wMob + '×')}</div>
+    </section>
+
+    <section class="card">
+      <h3 class="font-bold flex items-center gap-2 mb-3">${ic('footprints', 'w-5 h-5 text-emerald-300')} Dernière course</h3>
+      ${lastRun ? `<p class="text-lg font-semibold">${esc(lastRun.type)} · ${fr(lastRun.distance)} km</p>
+        <p class="text-sm text-slate-400">${fmtMed(lastRun.date)} · ${lastRun.duration} min · ${pace(num(lastRun.duration), num(lastRun.distance))}</p>
+        <span class="chip mt-2 ${KNEE_C[lastRun.knee || 0]}">Genou : ${KNEE[lastRun.knee || 0]}</span>`
+      : '<p class="text-sm text-slate-400">Aucune sortie enregistrée.</p>'}
+      <a href="#suivi" class="btn btn-ghost w-full mt-4" data-a="trackSub" data-v="run">${ic('plus')} Ajouter une sortie</a>
+    </section>
+
+    <section class="card">
+      <h3 class="font-bold flex items-center gap-2 mb-1">${ic('person-standing', 'w-5 h-5 text-amber-300')} Mobilité</h3>
+      <p class="text-sm text-slate-400">Routine de ~${Math.round(MOBILITY.reduce((s, m) => s + m.dur + PREP, 0) / 60)} min · ${D.mobility.length ? 'dernière ' + ago(daysBetween(D.mobility[D.mobility.length - 1].date, t)) : 'jamais faite'}</p>
+      <a href="#mobilite" class="btn btn-ghost w-full mt-4">${ic('play')} Lancer la routine</a>
+    </section>
+  </div>`;
+}
+
+/* ==================================================================
+   9. VUE : SÉANCE
+   ================================================================== */
+function renderWorkout() {
+  const A = D.active;
+  if (!A) return renderWorkoutStart();
+  const act = A.exercises.filter(e => !e.skipped);
+  const total = act.reduce((s, e) => s + e.sets.length, 0), done = act.reduce((s, e) => s + e.sets.filter(x => x.done).length, 0);
+  return `
+  <div class="sticky top-0 z-20 -mx-4 lg:-mx-8 px-4 lg:px-8 py-3 bg-ink-900/90 backdrop-blur border-b border-ink-600/60 mb-4">
+    <div class="flex items-center justify-between gap-3">
+      <div class="min-w-0"><p class="text-[11px] text-slate-400 uppercase tracking-wider">Séance en cours</p>
+        <h1 class="h-title leading-none">${typeLabel(A.type)} <span id="elapsed" class="text-arc tabular-nums text-xl ml-1"></span></h1></div>
+      <button class="btn btn-primary shrink-0" data-a="finishSession">${ic('flag')} Terminer</button>
+    </div>
+    <div class="mt-3 flex items-center gap-3"><div class="flex-1 h-2 rounded-full bg-ink-600 overflow-hidden"><div class="h-full bg-arc transition-all" style="width:${total ? done / total * 100 : 0}%"></div></div>
+      <span class="text-xs text-slate-400 tabular-nums">${done}/${total} séries</span></div>
+    <div class="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
+      <button class="btn btn-sm shrink-0 ${A.express ? 'bg-flame/20 text-orange-300' : 'btn-ghost'}" data-a="toggleExpress">${ic('zap', 'w-4 h-4')} Express ${A.express ? 'ON' : 'OFF'}</button>
+      <button class="btn btn-sm btn-ghost shrink-0" data-a="manualRest">${ic('timer', 'w-4 h-4')} Repos ${D.settings.rest}s</button>
+      <button class="btn btn-sm btn-danger shrink-0" data-a="cancelSession">${ic('x', 'w-4 h-4')} Abandonner</button>
+    </div>
+  </div>
+  ${A.express ? '<p class="text-sm text-orange-300 mb-3 flex gap-2 items-center">' + ic('zap', 'w-4 h-4') + 'Mode express : exercices secondaires sautés, priorité aux mouvements principaux.</p>' : ''}
+  <div class="grid gap-4 xl:grid-cols-2">${A.exercises.map(exCard).join('')}</div>`;
+}
+
+const SET_GRID = 'grid grid-cols-[1.1rem_1fr_1fr_3.9rem_3rem] gap-1.5 items-center';
+const RPE_OPTS = [1, 2, 3, 4, 5, 6, 6.5, 7, 7.5, 8, 8.5, 9, 9.5, 10];
+function exCard(e, i) {
+  const sg = e.sugg;
+  const cls = { up: 'bg-arc/15 text-arc', reps: 'bg-sky-400/15 text-sky-300', hold: 'bg-amber-400/15 text-amber-300', warn: 'bg-flame/15 text-orange-300', new: 'bg-ink-600 text-slate-300' }[sg.type];
+  const icn = { up: 'trending-up', reps: 'repeat', hold: 'pause', warn: 'triangle-alert', new: 'sparkles' }[sg.type];
+  const allDone = e.sets.length && e.sets.every(s => s.done);
+  return `<section class="card ${e.skipped ? 'opacity-50' : ''} ${allDone ? '!border-arc/50' : ''}">
+    <div class="flex items-start justify-between gap-2">
+      <div class="min-w-0"><h3 class="font-bold text-lg leading-tight flex items-center gap-2">${allDone ? ic('circle-check', 'w-5 h-5 text-arc shrink-0') : ''}${esc(e.name)}</h3>
+        <p class="text-xs text-slate-400 mt-0.5">${e.sets.length} × ${e.repMin}-${e.repMax} reps · repos ${e.rest}s${e.secondary ? ' · <span class="text-orange-300">secondaire</span>' : ''}</p></div>
+      <button class="btn btn-sm btn-ghost shrink-0" data-a="skipEx" data-i="${i}">${e.skipped ? 'Reprendre' : 'Passer'}</button>
+    </div>
+    ${e.skipped ? '' : `
+    <div class="flex items-center gap-2 mt-3"><span class="chip bg-arc/15 text-arc tabular-nums">${ic('gauge', 'w-3.5 h-3.5')} Tempo ${esc(tempoStr(e.tempo))}</span><button class="btn btn-sm btn-ghost !h-8" data-a="tempoOpen" data-i="${i}">${ic('play', 'w-3.5 h-3.5')} Guide</button></div>
+    <p class="text-xs text-slate-400 mt-2">${e.prev ? `Dernière fois (${fmtShort(e.prev.date)}) : <span class="text-slate-200 tabular-nums">${e.prev.sets.map(s => `${fmtKg(s.kg)}×${s.reps}${s.rpe ? '@' + fr(s.rpe) : ''}`).join(' · ')}</span>` : 'Aucun historique pour cet exercice'}</p>
+    <div class="mt-2 text-sm rounded-lg px-3 py-2 ${cls} flex gap-2 items-start">${ic(icn, 'w-4 h-4 mt-0.5 shrink-0')}<span>${esc(sg.text)}</span></div>
+    <div class="mt-3 ${SET_GRID} text-[10px] uppercase tracking-wider text-slate-500"><span>#</span><span class="text-center">Kg</span><span class="text-center">Reps</span><span class="text-center">RPE</span><span></span></div>
+    <div class="space-y-1.5 mt-1">${e.sets.map((s, j) => setRow(i, s, j)).join('')}</div>
+    <div class="flex gap-2 mt-3">
+      <button class="btn btn-sm btn-ghost flex-1" data-a="addSet" data-i="${i}">${ic('plus', 'w-4 h-4')} Série</button>
+      <button class="btn btn-sm btn-ghost flex-1" data-a="delSet" data-i="${i}" ${e.sets.length <= 1 ? 'disabled' : ''}>${ic('minus', 'w-4 h-4')} Série</button>
+    </div>`}
+  </section>`;
+}
+function setRow(i, s, j) {
+  const d = `data-e="${i}" data-s="${j}"`, dim = s.done ? 'opacity-60' : '';
+  return `<div class="${SET_GRID}">
+    <span class="text-sm font-bold text-slate-500 text-center">${j + 1}</span>
+    <input class="inp !h-12 !px-1 text-center text-lg font-semibold tabular-nums ${dim}" type="number" inputmode="decimal" step="0.5" min="0" placeholder="kg" value="${esc(s.kg)}" data-in="set" ${d} data-f="kg">
+    <input class="inp !h-12 !px-1 text-center text-lg font-semibold tabular-nums ${dim}" type="number" inputmode="numeric" step="1" min="0" placeholder="reps" value="${esc(s.reps)}" data-in="set" ${d} data-f="reps">
+    <select class="inp !h-12 !px-1 text-center ${dim}" data-in="set" ${d} data-f="rpe" aria-label="RPE"><option value="">–</option>${RPE_OPTS.map(v => `<option value="${v}" ${String(s.rpe) === String(v) ? 'selected' : ''}>${fr(v)}</option>`).join('')}</select>
+    <button class="h-12 rounded-xl flex items-center justify-center transition ${s.done ? 'bg-arc text-ink-900' : 'bg-ink-600 text-slate-300'}" data-a="doneSet" ${d} aria-label="Valider la série">${ic('check', 'w-6 h-6')}</button>
+  </div>`;
+}
+
+function renderWorkoutStart() {
+  const n = D.next, o = n === 'upper' ? 'lower' : 'upper', t = todayISO();
+  const last = D.sessions[D.sessions.length - 1];
+  const hist = [...D.sessions].reverse().slice(0, 20);
+  return `
+  ${pageTitle('Séance', 'Rotation Upper / Lower')}
+  <div class="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+    <section class="card">
+      <p class="text-xs uppercase tracking-wider text-slate-400">Prochaine dans la rotation</p>
+      <h2 class="font-display text-6xl font-extrabold uppercase text-arc leading-none mt-1">${typeLabel(n)}</h2>
+      <p class="text-slate-300">${typeSub(n)} · ${D.program[n].length} exercices</p>
+      ${last ? `<p class="text-xs text-slate-500 mt-1">Dernière séance : ${typeLabel(last.type)} ${ago(daysBetween(last.date, t))}. Un jour sauté ne décale rien : la rotation reprend où tu l'as laissée.</p>` : ''}
+      <ul class="mt-4 space-y-1.5">${D.program[n].map(e => `<li class="flex justify-between text-sm"><span class="${e.secondary ? 'text-slate-400' : ''}">${esc(e.name)}${e.secondary ? ' <span class="text-[10px] text-orange-300 uppercase">sec.</span>' : ''}</span><span class="text-slate-500 tabular-nums">${e.sets}×${e.repMin}-${e.repMax}</span></li>`).join('')}</ul>
+      <button class="btn btn-primary w-full mt-5 h-14 text-lg" data-a="startSession" data-t="${n}">${ic('play')} Démarrer ${typeLabel(n)}</button>
+      <button class="btn btn-ghost w-full mt-2" data-a="startSession" data-t="${o}">Faire ${typeLabel(o)} à la place</button>
+      <a href="#reglages" class="block text-center text-xs text-slate-500 mt-3 underline">Modifier le programme</a>
+    </section>
+    <section class="card">
+      <h3 class="font-bold mb-3 flex items-center gap-2">${ic('history', 'w-5 h-5')} Historique</h3>
+      ${hist.length ? `<div class="space-y-2">${hist.map(s => {
+        return `<button class="w-full text-left rounded-xl bg-ink-700/60 hover:bg-ink-700 p-3 flex items-center gap-3" data-a="sessionDetail" data-id="${s.id}">
+          <span class="chip ${s.type === 'upper' ? 'bg-arc/15 text-arc' : 'bg-violet-400/15 text-violet-300'}">${typeLabel(s.type)}</span>
+          <span class="flex-1 min-w-0"><span class="block text-sm font-semibold">${fmtMed(s.date)}</span>
+          <span class="block text-xs text-slate-400 tabular-nums">${Math.round((s.end - s.start) / 60000)} min · ${sessionSets(s)} séries · ${fr(sessionVolume(s) / 1000, 1)} t${s.express ? ' · express' : ''}</span></span>
+          ${ic('chevron-right', 'w-4 h-4 text-slate-500')}</button>`;
+      }).join('')}</div>` : '<p class="text-sm text-slate-400">Tes séances terminées apparaîtront ici.</p>'}
+    </section>
+  </div>`;
+}
+function sessionDetailModal(id) {
+  const s = D.sessions.find(x => x.id === id); if (!s) return;
+  openModal(`
+    <div class="flex items-start justify-between mb-4"><div><h2 class="h-title">${typeLabel(s.type)} · ${fmtMed(s.date)}</h2>
+      <p class="text-sm text-slate-400">${Math.round((s.end - s.start) / 60000)} min · volume ${fr(sessionVolume(s), 0)} kg</p></div>
+      <button class="btn btn-sm btn-ghost" data-a="closeModal">${ic('x', 'w-4 h-4')}</button></div>
+    <div class="space-y-3">${s.exercises.map(e => `<div class="rounded-xl bg-ink-700/60 p-3"><p class="font-semibold">${esc(e.name)}${e.tempo ? ` <span class="text-xs text-slate-400 font-normal">· tempo ${esc(e.tempo)}</span>` : ''}</p>
+      <p class="text-sm text-slate-300 tabular-nums mt-1">${e.skipped || !e.sets.length ? '<span class="text-slate-500">Sauté</span>' : e.sets.map(x => `${fmtKg(x.kg)} kg × ${x.reps}${x.rpe ? ' @' + fr(x.rpe) : ''}`).join('<br>')}</p></div>`).join('')}</div>
+    <button class="btn btn-danger w-full mt-5" data-a="delSession" data-id="${s.id}">${ic('trash-2', 'w-4 h-4')} Supprimer cette séance</button>`);
+}
+
+/* ==================================================================
+   10. VUE : NUTRITION
+   ================================================================== */
+function renderNutrition() {
+  const sub = UI.nutriSub;
+  return `${pageTitle('Nutrition', 'Suivi quotidien & meal prep')}
+  ${tabs([['day', 'Journée', 'flame'], ['recipes', 'Recettes', 'chef-hat'], ['shop', 'Courses', 'shopping-cart']], sub, 'nutriSub')}
+  ${sub === 'day' ? renderNutriDay() : sub === 'recipes' ? renderRecipes() : renderShop()}`;
+}
+
+function renderNutriDay() {
+  const d = UI.nutriDate, t = todayISO(), tg = targetsFor(d), tot = dayTotals(d), meals = D.meals[d] || [];
+  const left = tg.kcal - tot.kcal;
+  const recOpts = D.recipes.map(r => `<option value="${r.id}">${esc(r.name)} (${r0(recipeTotals(r).per.kcal)} kcal/portion)</option>`).join('');
+  const at = UI.addTab;
+  return `
+  <div class="flex items-center justify-between gap-2 mb-4">
+    <button class="btn btn-ghost !w-12 !px-0" data-a="nDay" data-v="-1" aria-label="Jour précédent">${ic('chevron-left')}</button>
+    <div class="text-center"><p class="font-semibold first-letter:uppercase">${d === t ? "Aujourd'hui" : fmtLong(d)}</p>${d !== t ? `<button class="text-xs text-arc" data-a="nToday">Revenir à aujourd'hui</button>` : `<p class="text-xs text-slate-400">${fmtMed(d)}</p>`}</div>
+    <button class="btn btn-ghost !w-12 !px-0" data-a="nDay" data-v="1" aria-label="Jour suivant">${ic('chevron-right')}</button>
+  </div>
+  <div class="grid gap-4 lg:grid-cols-2">
+    <section class="card">
+      <div class="flex flex-col sm:flex-row items-center gap-5">
+        ${ring(tot.kcal, tg.kcal, { size: 150, stroke: 14, label: r0(tot.kcal), sub: `sur ${r0(tg.kcal)} kcal<br>${left >= 0 ? 'reste ' + r0(left) : '<span class="text-orange-300">+' + r0(-left) + ' kcal</span>'}` })}
+        <div class="flex-1 w-full space-y-3">${bar('Protéines', tot.p, tg.p, MAC.p)}${bar('Lipides', tot.f, tg.f, MAC.f)}${bar('Glucides', tot.c, tg.c, MAC.c)}</div>
+      </div>
+      <button class="btn w-full mt-4 ${tg.run ? 'bg-sky-400/20 text-sky-200 border border-sky-400/40' : 'btn-ghost'}" data-a="toggleRunDay">${ic('footprints')} Jour de course ${tg.run ? `activé (+${r0(tg.bonus)} kcal, en glucides)` : '— désactivé'}</button>
+    </section>
+
+    <section class="card">
+      <h3 class="font-bold mb-3">Ajouter</h3>
+      ${tabs([['recipe', 'Recette'], ['quick', 'Repas types'], ['manual', 'Manuel']], at, 'addTab')}
+      ${at === 'recipe' ? (D.recipes.length ? `
+        <label class="lbl">Recette</label><select id="addRecipeSel" class="inp">${recOpts}</select>
+        <div class="flex gap-2 mt-3 items-end">
+          <div class="w-32"><label class="lbl">Portions</label><input id="addRecipePortions" class="inp text-center" type="number" inputmode="decimal" step="0.5" min="0.25" value="1"></div>
+          <button class="btn btn-primary flex-1" data-a="addRecipeMeal">${ic('plus')} Ajouter</button>
+        </div>` : '<p class="text-sm text-slate-400">Crée d\'abord une recette dans l\'onglet Recettes.</p>') : ''}
+      ${at === 'quick' ? (D.quick.length ? `<div class="grid sm:grid-cols-2 gap-2">${D.quick.map(q => `
+        <div class="flex items-stretch rounded-xl bg-ink-700/60 overflow-hidden">
+          <button class="flex-1 text-left p-3 hover:bg-ink-700" data-a="addQuick" data-id="${q.id}"><span class="block font-semibold text-sm">${esc(q.name)}</span><span class="block text-xs text-slate-400 mt-0.5">${macroLine(q)}</span></button>
+          <button class="px-3 text-slate-500 hover:text-red-400" data-a="delQuick" data-id="${q.id}" aria-label="Supprimer">${ic('x', 'w-4 h-4')}</button>
+        </div>`).join('')}</div>` : '<p class="text-sm text-slate-400">Aucun repas type. Ajoute un repas en mode Manuel et coche « Enregistrer comme repas type ».</p>') : ''}
+      ${at === 'manual' ? `
+        <label class="lbl">Nom</label><input id="m_name" class="inp" placeholder="Ex. Sandwich poulet">
+        <div class="grid grid-cols-4 gap-2 mt-3">
+          <div><label class="lbl">Kcal</label><input id="m_kcal" class="inp !px-2 text-center" type="number" inputmode="decimal" placeholder="auto"></div>
+          <div><label class="lbl" style="color:${MAC.p}">Prot.</label><input id="m_p" class="inp !px-2 text-center" type="number" inputmode="decimal" placeholder="g"></div>
+          <div><label class="lbl" style="color:${MAC.f}">Lip.</label><input id="m_f" class="inp !px-2 text-center" type="number" inputmode="decimal" placeholder="g"></div>
+          <div><label class="lbl" style="color:${MAC.c}">Gluc.</label><input id="m_c" class="inp !px-2 text-center" type="number" inputmode="decimal" placeholder="g"></div>
+        </div>
+        <label class="flex items-center gap-2 mt-3 text-sm text-slate-300"><input id="m_save" type="checkbox" class="w-5 h-5 accent-sky-400"> Enregistrer comme repas type</label>
+        <button class="btn btn-primary w-full mt-3" data-a="addManual">${ic('plus')} Ajouter</button>
+        <p class="text-xs text-slate-500 mt-2">Kcal vide = calcul auto (4·P + 9·L + 4·G).</p>` : ''}
+    </section>
+
+    <section class="card lg:col-span-2">
+      <div class="flex items-center justify-between mb-3"><h3 class="font-bold">Journal (${meals.length})</h3>
+        ${!meals.length && (D.meals[addDays(d, -1)] || []).length ? `<button class="btn btn-sm btn-ghost" data-a="copyYesterday">${ic('copy', 'w-4 h-4')} Copier la veille</button>` : ''}</div>
+      ${meals.length ? `<div class="divide-y divide-ink-600/60">${meals.map(m => `
+        <div class="flex items-center gap-3 py-2.5"><div class="flex-1 min-w-0"><p class="font-medium text-sm truncate">${esc(m.name)}</p><p class="text-xs text-slate-400">${macroLine(m)}</p></div>
+        <button class="w-10 h-10 rounded-lg text-slate-500 hover:text-red-400 hover:bg-ink-700 flex items-center justify-center" data-a="delMeal" data-id="${m.id}" aria-label="Supprimer">${ic('trash-2', 'w-4 h-4')}</button></div>`).join('')}</div>`
+      : '<p class="text-sm text-slate-400">Rien de saisi pour cette journée.</p>'}
+    </section>
+  </div>`;
+}
+
+function renderRecipes() {
+  return `
+  <button class="btn btn-primary w-full sm:w-auto mb-4" data-a="newRecipe">${ic('plus')} Nouvelle recette</button>
+  <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">${D.recipes.map(r => {
+    const t = recipeTotals(r);
+    return `<section class="card flex flex-col">
+      <div class="flex items-start justify-between gap-2"><h3 class="font-bold text-lg leading-tight">${esc(r.name)}</h3><span class="chip bg-ink-600 text-slate-300 shrink-0">${esc(r.cat || 'Autre')}</span></div>
+      <p class="text-xs text-slate-400 mt-1">${r.ingredients.length} ingrédients · ${r.portions} portion${r.portions > 1 ? 's' : ''}</p>
+      <div class="mt-3 rounded-xl bg-ink-700/60 p-3"><p class="text-[11px] uppercase tracking-wider text-slate-400 mb-1">Par portion</p><p class="text-sm">${macroLine(t.per)}</p></div>
+      <p class="text-xs text-slate-500 mt-2">Total : ${macroLine(t.total)}</p>
+      <div class="grid grid-cols-3 gap-2 mt-auto pt-4">
+        <button class="btn btn-sm btn-primary" data-a="recipeToday" data-id="${r.id}">${ic('plus', 'w-4 h-4')} Journal</button>
+        <button class="btn btn-sm btn-ghost" data-a="editRecipe" data-id="${r.id}">${ic('pencil', 'w-4 h-4')}</button>
+        <button class="btn btn-sm btn-danger" data-a="delRecipe" data-id="${r.id}">${ic('trash-2', 'w-4 h-4')}</button>
+      </div></section>`;
+  }).join('') || '<p class="text-slate-400">Aucune recette.</p>'}</div>`;
+}
+
+/* ---- Éditeur de recette (modale) ---- */
+function recipeModal() {
+  const r = DRAFT;
+  openModal(`
+    <div class="flex items-center justify-between mb-4"><h2 class="h-title">${r.id ? 'Modifier' : 'Nouvelle'} recette</h2><button class="btn btn-sm btn-ghost" data-a="closeModal">${ic('x', 'w-4 h-4')}</button></div>
+    <datalist id="foodlist">${D.foods.map(f => `<option value="${esc(f.name)}">`).join('')}</datalist>
+    <label class="lbl">Nom</label><input class="inp" value="${esc(r.name)}" data-in="draft" data-f="name" placeholder="Ex. Chili con carne">
+    <div class="grid grid-cols-2 gap-2 mt-3">
+      <div><label class="lbl">Catégorie</label><select class="inp" data-in="draft" data-f="cat">${['Meal prep', 'Collation', 'Petit-déjeuner', 'Autre'].map(c => `<option ${r.cat === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+      <div><label class="lbl">Portions</label><input class="inp text-center" type="number" inputmode="numeric" min="1" value="${r.portions}" data-in="draft" data-f="portions"></div>
+    </div>
+    <div class="flex items-center justify-between mt-5 mb-2"><h3 class="font-bold">Ingrédients</h3><span class="text-xs text-slate-500">quantités en g · macros pour 100 g</span></div>
+    <div class="space-y-2">${r.ingredients.map((g, k) => `
+      <div class="rounded-xl bg-ink-700/50 p-2.5">
+        <div class="flex gap-2"><input class="inp !h-11 flex-1" list="foodlist" placeholder="Ingrédient" value="${esc(g.name)}" data-in="ing" data-k="${k}" data-f="name">
+          <input class="inp !h-11 !w-20 text-center" type="number" inputmode="decimal" placeholder="g" value="${g.qty || ''}" data-in="ing" data-k="${k}" data-f="qty">
+          <button class="w-11 h-11 shrink-0 rounded-xl text-slate-500 hover:text-red-400 flex items-center justify-center" data-a="delIng" data-k="${k}">${ic('trash-2', 'w-4 h-4')}</button></div>
+        <div class="grid grid-cols-4 gap-1.5 mt-1.5">${[['kcal', 'kcal', '#cbd5e1'], ['p', 'P', MAC.p], ['f', 'L', MAC.f], ['c', 'G', MAC.c]].map(([f, l, c]) => `
+          <label class="relative"><span class="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold" style="color:${c}">${l}</span>
+          <input id="ing_${k}_${f}" class="inp !h-9 !pl-8 !pr-1 text-sm tabular-nums" type="number" inputmode="decimal" value="${g[f] || ''}" data-in="ing" data-k="${k}" data-f="${f}"></label>`).join('')}</div>
+      </div>`).join('')}</div>
+    <button class="btn btn-ghost w-full mt-2" data-a="addIng">${ic('plus', 'w-4 h-4')} Ingrédient</button>
+    <div id="draftTotals" class="mt-4 rounded-xl border border-arc/30 bg-arc/5 p-3 text-sm"></div>
+    <div class="grid grid-cols-2 gap-2 mt-4"><button class="btn btn-ghost" data-a="closeModal">Annuler</button><button class="btn btn-primary" data-a="saveRecipe">${ic('check')} Enregistrer</button></div>`);
+  updateDraftTotals();
+}
+function updateDraftTotals() {
+  if (!DRAFT || !$('draftTotals')) return;
+  const t = recipeTotals(DRAFT);
+  $('draftTotals').innerHTML = `<p><span class="text-slate-400">Total :</span> ${macroLine(t.total)}</p><p class="mt-1"><span class="text-arc font-semibold">Par portion (÷${Math.max(1, num(DRAFT.portions))}) :</span> ${macroLine(t.per)}</p>`;
+}
+function fillIngFromFood(k, force) {
+  const g = DRAFT.ingredients[k], f = D.foods.find(x => x.name.toLowerCase() === (g.name || '').trim().toLowerCase());
+  if (!f) return;
+  if (!force && (num(g.kcal) || num(g.p) || num(g.f) || num(g.c))) return;
+  ['kcal', 'p', 'f', 'c'].forEach(m => { g[m] = f[m]; const el = $(`ing_${k}_${m}`); if (el) el.value = f[m]; });
+  updateDraftTotals();
+}
+function saveRecipe() {
+  const r = DRAFT;
+  r.name = (r.name || '').trim(); r.ingredients = r.ingredients.filter(i => (i.name || '').trim());
+  if (!r.name) return toast('Donne un nom à la recette', 'err');
+  if (!r.ingredients.length) return toast('Ajoute au moins un ingrédient', 'err');
+  r.portions = Math.max(1, Math.round(num(r.portions)) || 1);
+  r.ingredients.forEach(i => {
+    ['qty', 'kcal', 'p', 'f', 'c'].forEach(m => i[m] = num(i[m]));
+    if (!D.foods.some(f => f.name.toLowerCase() === i.name.trim().toLowerCase()) && i.kcal) D.foods.push(food(i.name.trim(), i.kcal, i.p, i.f, i.c));
+  });
+  if (r.id) D.recipes = D.recipes.map(x => x.id === r.id ? r : x); else { r.id = uid(); D.recipes.push(r); }
+  save(); closeModal(); render(); toast('Recette enregistrée');
+}
+
+function shopAll() {
+  const rec = shoppingList().map(i => ({ key: i.key, name: i.name, qtyText: fmtQty(i.qty), from: [...i.from].join(', '), manual: false }));
+  const man = (D.shopExtra || []).map(x => ({ key: 'x:' + x.id, name: x.name, qtyText: x.qty || '', from: '', manual: true, id: x.id }));
+  return [...rec, ...man];
+}
+function renderShop() {
+  const list = shopAll(), rec = list.filter(i => !i.manual), man = list.filter(i => i.manual);
+  const planned = Object.entries(D.plan).reduce((s, [rid, n]) => { const r = D.recipes.find(x => x.id === rid); return r ? s + n * r.portions : s; }, 0);
+  const rows = items => items.map(i => { const ok = D.shopChecked[i.key]; return `<div class="flex items-center gap-1">
+      <label class="flex-1 min-w-0 flex items-center gap-3 py-3 cursor-pointer"><input type="checkbox" class="w-6 h-6 accent-sky-400 shrink-0" data-in="shop" data-k="${esc(i.key)}" ${ok ? 'checked' : ''}>
+        <span class="flex-1 min-w-0 ${ok ? 'line-through text-slate-500' : ''}"><span class="block font-medium">${esc(i.name)}</span>${i.from ? `<span class="block text-xs text-slate-500 truncate">${esc(i.from)}</span>` : ''}</span>
+        ${i.qtyText ? `<span class="font-semibold tabular-nums ${ok ? 'text-slate-500' : 'text-arc'}">${esc(i.qtyText)}</span>` : ''}</label>
+      ${i.manual ? `<button class="w-10 h-10 shrink-0 rounded-lg text-slate-500 hover:text-red-400 flex items-center justify-center" data-a="delShopItem" data-id="${i.id}" aria-label="Retirer">${ic('x', 'w-4 h-4')}</button>` : ''}</div>`; }).join('');
+  return `<div class="grid gap-4 lg:grid-cols-2">
+    <section class="card">
+      <div class="flex items-center justify-between mb-1"><h3 class="font-bold">Planning de la semaine</h3>${Object.values(D.plan).some(Boolean) ? `<button class="btn btn-sm btn-ghost" data-a="resetPlan">${ic('rotate-ccw', 'w-4 h-4')} Réinitialiser</button>` : ''}</div>
+      <p class="text-xs text-slate-400 mb-3">Nombre de fournées à préparer · ${planned} portions planifiées</p>
+      <div class="space-y-2">${D.recipes.map(r => { const n = D.plan[r.id] || 0; return `
+        <div class="flex items-center gap-3 rounded-xl bg-ink-700/60 p-2.5 ${n ? 'ring-1 ring-arc/40' : ''}">
+          <div class="flex-1 min-w-0"><p class="font-medium text-sm truncate">${esc(r.name)}</p><p class="text-xs text-slate-400">${n ? `${n} × ${r.portions} = ${n * r.portions} portions` : `${r.portions} portions / fournée`}</p></div>
+          <button class="w-11 h-11 rounded-xl bg-ink-600 flex items-center justify-center" data-a="plan" data-id="${r.id}" data-v="-1">${ic('minus', 'w-4 h-4')}</button>
+          <span class="w-6 text-center font-display text-2xl font-bold tabular-nums">${n}</span>
+          <button class="w-11 h-11 rounded-xl bg-arc text-ink-900 flex items-center justify-center" data-a="plan" data-id="${r.id}" data-v="1">${ic('plus', 'w-4 h-4')}</button>
+        </div>`; }).join('') || '<p class="text-sm text-slate-400">Aucune recette.</p>'}</div>
+    </section>
+    <section class="card">
+      <div class="flex items-center justify-between mb-3"><h3 class="font-bold flex items-center gap-2">${ic('shopping-cart', 'w-5 h-5')} Liste de courses</h3><span class="text-xs text-slate-400">${list.filter(i => D.shopChecked[i.key]).length}/${list.length}</span></div>
+      <datalist id="shoplist">${D.foods.map(f => `<option value="${esc(f.name)}">`).join('')}</datalist>
+      <div class="flex gap-2 mb-3">
+        <input id="s_name" list="shoplist" class="inp flex-1 min-w-0" placeholder="Ajouter un article…" autocomplete="off" enterkeyhint="done">
+        <input id="s_qty" class="inp !w-24 text-center" placeholder="Qté" autocomplete="off" enterkeyhint="done">
+        <button class="btn btn-primary !px-3 shrink-0" data-a="addShopItem" aria-label="Ajouter l'article">${ic('plus')}</button>
+      </div>
+      ${rec.length ? `<div class="divide-y divide-ink-600/60">${rows(rec)}</div>` : ''}
+      ${man.length ? `<p class="lbl mt-4">Mes ajouts</p><div class="divide-y divide-ink-600/60">${rows(man)}</div>` : ''}
+      ${!list.length ? '<p class="text-sm text-slate-400">Planifie des recettes (à gauche) ou ajoute un article ci-dessus : ta liste se remplit ici.</p>' : `
+        <div class="grid grid-cols-2 gap-2 mt-4"><button class="btn btn-ghost" data-a="copyShop">${ic('copy', 'w-4 h-4')} Copier / partager</button><button class="btn btn-ghost" data-a="uncheckShop">${ic('rotate-ccw', 'w-4 h-4')} Tout décocher</button></div>
+        ${man.some(i => D.shopChecked[i.key]) ? `<button class="btn btn-danger w-full mt-2" data-a="clearShopDone">${ic('trash-2', 'w-4 h-4')} Retirer mes ajouts cochés</button>` : ''}`}
+    </section></div>`;
+}
+
+/* ==================================================================
+   11. VUE : SUIVI (POIDS & COURSE)
+   ================================================================== */
+function renderTracking() {
+  return `${pageTitle('Suivi', 'Poids & course à pied')}
+  ${tabs([['weight', 'Poids', 'scale'], ['run', 'Course', 'footprints']], UI.trackSub, 'trackSub')}
+  ${UI.trackSub === 'weight' ? renderWeight() : renderRuns()}`;
+}
+function renderWeight() {
+  const ws = weightStats(), t = todayISO(), todayW = D.weights.find(w => w.date === t);
+  const hist = weightSeries().reverse().slice(0, 30);
+  return `<div class="grid gap-4 lg:grid-cols-[1fr_2fr]">
+    <div class="space-y-4">
+      <section class="card">
+        <h3 class="font-bold mb-3">Pesée</h3>
+        <div class="grid grid-cols-2 gap-2">
+          <div><label class="lbl">Date</label><input id="w_date" class="inp" type="date" value="${t}" max="${t}"></div>
+          <div><label class="lbl">Poids (kg)</label><input id="w_kg" class="inp text-center text-lg font-semibold" type="number" inputmode="decimal" step="0.1" placeholder="${ws ? fr(ws.last.kg) : '75,0'}" value="${todayW ? todayW.kg : ''}"></div>
+        </div>
+        <button class="btn btn-primary w-full mt-3" data-a="saveWeight">${ic('check')} Enregistrer</button>
+      </section>
+      ${ws ? `<section class="grid grid-cols-3 gap-2">${stat('Dernier', fr(ws.last.kg) + ' kg', fmtShort(ws.last.date))}${stat('Moy. 7 j', fr(ws.avg, 2))}${stat('Tendance', ws.delta == null ? '–' : (ws.delta > 0 ? '+' : '') + fr(ws.delta, 2), 'vs sem. préc.')}</section>` : ''}
+    </div>
+    <section class="card">
+      <div class="flex items-center justify-between mb-3"><h3 class="font-bold">Évolution</h3>
+        <div class="flex gap-1">${[[30, '30 j'], [90, '90 j'], [0, 'Tout']].map(([v, l]) => `<button class="btn btn-sm ${UI.wRange === v ? 'bg-ink-600 text-white' : 'text-slate-400'} !h-8" data-a="wRange" data-v="${v}">${l}</button>`).join('')}</div></div>
+      ${D.weights.length >= 2 ? '<div class="h-64 lg:h-80"><canvas id="wChart"></canvas></div>' : '<p class="text-sm text-slate-400">Il faut au moins 2 pesées pour afficher le graphique.</p>'}
+    </section>
+    <section class="card lg:col-span-2">
+      <h3 class="font-bold mb-2">Historique</h3>
+      ${hist.length ? `<div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-x-6 divide-y sm:divide-y-0 divide-ink-600/60">${hist.map(w => `
+        <div class="flex items-center gap-3 py-2 sm:border-b sm:border-ink-600/60"><span class="text-sm text-slate-400 w-24">${fmtMed(w.date)}</span><span class="flex-1 font-semibold tabular-nums">${fr(w.kg)} kg</span><span class="text-xs text-slate-500 tabular-nums">moy. ${fr(w.avg, 2)}</span>
+        <button class="w-9 h-9 rounded-lg text-slate-500 hover:text-red-400 flex items-center justify-center" data-a="delWeight" data-v="${w.date}">${ic('x', 'w-4 h-4')}</button></div>`).join('')}</div>` : '<p class="text-sm text-slate-400">Aucune pesée.</p>'}
+    </section></div>`;
+}
+function renderRuns() {
+  const t = todayISO(), wk = weekStart(t), mo = t.slice(0, 8) + '01';
+  const runs = [...D.runs].sort((a, b) => b.date.localeCompare(a.date) || b.at - a.at);
+  const kmW = runsInRange(wk, t).reduce((s, r) => s + num(r.distance), 0), kmM = runsInRange(mo, t).reduce((s, r) => s + num(r.distance), 0);
+  const tot = D.runs.reduce((a, r) => ({ d: a.d + num(r.distance), m: a.m + num(r.duration) }), { d: 0, m: 0 });
+  const kneeAlert = runs.slice(0, 2).length === 2 && runs.slice(0, 2).every(r => (r.knee || 0) >= 2);
+  return `${kneeAlert ? `<div class="mb-4 rounded-xl border border-flame/50 bg-flame/10 p-3 text-sm text-orange-200 flex gap-2">${ic('triangle-alert', 'w-5 h-5 shrink-0')}<span>Gêne au genou modérée ou forte sur tes 2 dernières sorties : réduis le volume, privilégie le plat et un sol souple, et consulte si ça persiste.</span></div>` : ''}
+  <div class="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+    <section class="card">
+      <h3 class="font-bold mb-3">Nouvelle sortie</h3>
+      <div class="grid grid-cols-2 gap-2">
+        <div><label class="lbl">Date</label><input id="r_date" class="inp" type="date" value="${t}" max="${t}"></div>
+        <div><label class="lbl">Type</label><select id="r_type" class="inp">${['Footing', 'Fractionné', 'Tempo', 'Sortie longue', 'Côtes', 'Marche / course', 'Trail'].map(x => `<option>${x}</option>`).join('')}</select></div>
+        <div><label class="lbl">Durée (min)</label><input id="r_dur" class="inp text-center" type="number" inputmode="numeric" placeholder="40"></div>
+        <div><label class="lbl">Distance (km)</label><input id="r_dist" class="inp text-center" type="number" inputmode="decimal" step="0.01" placeholder="6,5"></div>
+      </div>
+      <label class="lbl mt-3">Ressenti</label>
+      <div class="grid grid-cols-5 gap-1.5" id="r_feel">${[1, 2, 3, 4, 5].map(v => `<button class="h-12 rounded-xl text-2xl ${v === 3 ? 'bg-arc/20 ring-2 ring-arc' : 'bg-ink-700'}" data-a="pickFeel" data-v="${v}">${FEEL[v]}</button>`).join('')}</div>
+      <label class="lbl mt-3">Impact genou</label>
+      <div class="grid grid-cols-4 gap-1.5" id="r_knee">${KNEE.map((l, v) => `<button class="h-11 rounded-xl text-sm font-semibold ${v === 0 ? 'bg-arc/20 ring-2 ring-arc' : 'bg-ink-700'}" data-a="pickKnee" data-v="${v}">${l}</button>`).join('')}</div>
+      <label class="lbl mt-3">Notes</label><input id="r_notes" class="inp" placeholder="Optionnel">
+      <button class="btn btn-primary w-full mt-4" data-a="saveRun">${ic('check')} Enregistrer la sortie</button>
+    </section>
+    <div class="space-y-4">
+      <section class="grid grid-cols-2 sm:grid-cols-4 gap-2">${stat('Semaine', fr(kmW) + ' km')}${stat('Mois', fr(kmM) + ' km')}${stat('Sorties', D.runs.length)}${stat('Allure moy.', tot.d ? mmss(tot.m * 60 / tot.d) : '–', 'min/km')}</section>
+      ${D.runs.length ? '<section class="card"><h3 class="font-bold mb-2">Km par semaine (8 dernières)</h3><div class="h-44"><canvas id="rChart"></canvas></div></section>' : ''}
+      <section class="card"><h3 class="font-bold mb-2">Journal</h3>
+        ${runs.length ? `<div class="space-y-2">${runs.slice(0, 40).map(r => `
+          <div class="rounded-xl bg-ink-700/60 p-3 flex gap-3 items-start">
+            <div class="text-2xl">${FEEL[r.feel] || '🙂'}</div>
+            <div class="flex-1 min-w-0"><p class="font-semibold">${esc(r.type)} · ${fr(r.distance)} km <span class="text-slate-400 font-normal text-sm">· ${r.duration} min</span></p>
+              <p class="text-xs text-slate-400">${fmtMed(r.date)} · ${pace(num(r.duration), num(r.distance))}</p>
+              <span class="chip mt-1.5 ${KNEE_C[r.knee || 0]}">Genou : ${KNEE[r.knee || 0]}</span>${r.notes ? `<p class="text-xs text-slate-400 mt-1.5">${esc(r.notes)}</p>` : ''}</div>
+            <button class="w-9 h-9 rounded-lg text-slate-500 hover:text-red-400 flex items-center justify-center" data-a="delRun" data-id="${r.id}">${ic('trash-2', 'w-4 h-4')}</button></div>`).join('')}</div>`
+        : '<p class="text-sm text-slate-400">Aucune sortie enregistrée.</p>'}</section>
+    </div></div>`;
+}
+const RUNFORM = { feel: 3, knee: 0 };
+
+/* ==================================================================
+   12. VUE : MOBILITÉ
+   ================================================================== */
+function renderMobility() {
+  const totalSec = MOBILITY.reduce((s, m, i) => s + mobDur(i) + PREP, 0);
+  const t = todayISO(), wk = weekStart(t);
+  if (MOB.on) {
+    const m = MOBILITY[MOB.idx], prep = MOB.phase === 'prep', C = 2 * Math.PI * 88;
+    return `${pageTitle('Mobilité', `Exercice ${MOB.idx + 1} / ${MOBILITY.length}`)}
+    <section class="card max-w-xl mx-auto text-center">
+      <p class="text-xs uppercase tracking-widest ${prep ? 'text-amber-300' : 'text-arc'} font-bold">${prep ? 'Prépare-toi' : 'Tiens la position'}</p>
+      <h2 class="font-display text-3xl font-bold uppercase mt-1">${esc(m.name)}</h2>
+      <div class="relative mx-auto my-5" style="width:200px;height:200px">
+        <svg width="200" height="200" class="-rotate-90"><circle cx="100" cy="100" r="88" fill="none" stroke="#1f2f4a" stroke-width="14"/>
+        <circle id="mobRing" cx="100" cy="100" r="88" fill="none" stroke="${prep ? '#fbbf24' : '#4da3ff'}" stroke-width="14" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="0"/></svg>
+        <div class="absolute inset-0 flex items-center justify-center"><span id="mobTime" class="font-display text-6xl font-bold tabular-nums">${mmss(MOB.left)}</span></div>
+      </div>
+      <p class="text-slate-300 text-sm leading-relaxed">${esc(m.desc)}</p>
+      <div class="grid grid-cols-4 gap-2 mt-6">
+        <button class="btn btn-ghost" data-a="mobPrev" ${MOB.idx === 0 ? 'disabled' : ''} aria-label="Précédent">${ic('skip-back')}</button>
+        <button class="btn btn-primary col-span-2 h-14" data-a="mobPause">${MOB.paused ? ic('play') + ' Reprendre' : ic('pause') + ' Pause'}</button>
+        <button class="btn btn-ghost" data-a="mobNext" aria-label="Suivant">${ic('skip-forward')}</button>
+      </div>
+      <button class="btn btn-danger w-full mt-2" data-a="mobStop">${ic('square', 'w-4 h-4')} Arrêter</button>
+      <div class="flex justify-center gap-1.5 mt-5">${MOBILITY.map((_, i) => `<span class="h-1.5 w-6 rounded-full ${i < MOB.idx ? 'bg-arc' : i === MOB.idx ? 'bg-arc/60' : 'bg-ink-600'}"></span>`).join('')}</div>
+    </section>`;
+  }
+  return `${pageTitle('Mobilité', 'Mini-routine guidée')}
+  <div class="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+    <section class="card">
+      <div class="flex items-center justify-between"><h3 class="font-bold">Routine bas du corps</h3><span class="chip bg-ink-600 text-slate-300">${ic('timer', 'w-3.5 h-3.5')} ~${Math.round(totalSec / 60)} min</span></div>
+      <ol class="mt-3 space-y-2">${MOBILITY.map((m, i) => `<li class="flex items-center gap-3 rounded-xl bg-ink-700/60 p-3"><span class="w-7 h-7 rounded-lg bg-ink-600 flex items-center justify-center text-sm font-bold">${i + 1}</span><span class="flex-1 text-sm font-medium">${esc(m.name)}</span><span class="text-sm text-slate-400 tabular-nums">${mobDur(i)} s</span></li>`).join('')}</ol>
+      <label class="lbl mt-4">Durée des maintiens</label>
+      <div class="grid grid-cols-3 gap-2">${[[0.67, 'Courte'], [1, 'Normale'], [1.34, 'Longue']].map(([v, l]) => `<button class="btn btn-sm ${MOB.scale === v ? 'bg-arc/20 text-arc ring-1 ring-arc' : 'btn-ghost'}" data-a="mobScale" data-v="${v}">${l}</button>`).join('')}</div>
+      <button class="btn btn-primary w-full mt-4 h-14 text-lg" data-a="mobStart">${ic('play')} Démarrer la routine</button>
+      <p class="text-xs text-slate-500 mt-2">5 s de préparation avant chaque position, bip et vibration à chaque changement.</p>
+    </section>
+    <section class="card">
+      <h3 class="font-bold mb-3">Régularité</h3>
+      <div class="grid grid-cols-2 gap-2">${stat('Cette semaine', D.mobility.filter(m => m.date >= wk).length + '×')}${stat('Total', D.mobility.length + '×')}</div>
+      <div class="flex gap-1.5 mt-4">${Array.from({ length: 14 }, (_, k) => { const d = addDays(t, k - 13), ok = D.mobility.some(m => m.date === d); return `<div class="flex-1 aspect-square rounded-md ${ok ? 'bg-arc' : 'bg-ink-600'}" title="${fmtShort(d)}"></div>`; }).join('')}</div>
+      <p class="text-xs text-slate-500 mt-2">14 derniers jours</p>
+    </section>
+  </div>`;
+}
+
+/* ==================================================================
+   13. VUE : RÉGLAGES (cibles, programme, sauvegarde)
+   ================================================================== */
+function renderSettings() {
+  const s = D.settings, macroK = num(s.p) * 4 + num(s.f) * 9 + num(s.c) * 4, pt = UI.progType;
+  const sInput = (k, l, c = '') => `<div><label class="lbl" ${c ? `style="color:${c}"` : ''}>${l}</label><input class="inp text-center" type="number" inputmode="decimal" value="${s[k]}" data-in="setting" data-k="${k}"></div>`;
+  let size = 0; try { size = (localStorage.getItem(KEY) || '').length; } catch (e) {}
+  return `${pageTitle('Réglages')}
+  <div class="grid gap-4 lg:grid-cols-2">
+    <section class="card">
+      <h3 class="font-bold mb-3">Cibles nutritionnelles (jour standard)</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">${sInput('kcal', 'Kcal')}${sInput('p', 'Prot. (g)', MAC.p)}${sInput('f', 'Lip. (g)', MAC.f)}${sInput('c', 'Gluc. (g)', MAC.c)}</div>
+      <p class="text-xs text-slate-500 mt-2" id="macroK">Les macros représentent ${r0(macroK)} kcal.</p>
+      <label class="lbl mt-4">Bonus jour de course : <span id="bonusVal" class="text-arc">+${s.runBonus} kcal</span></label>
+      <input type="range" min="150" max="250" step="10" value="${s.runBonus}" class="w-full accent-sky-400" data-in="setting" data-k="runBonus">
+      <p class="text-xs text-slate-500">Ajouté automatiquement en glucides les jours où une sortie est enregistrée (ou activé manuellement).</p>
+      <button class="btn btn-ghost btn-sm mt-3" data-a="resetTargets">${ic('rotate-ccw', 'w-4 h-4')} Valeurs d'origine (2616 / 181 / 78 / 296)</button>
+    </section>
+
+    <section class="card">
+      <h3 class="font-bold mb-3">Entraînement</h3>
+      <div class="grid grid-cols-2 gap-2">${sInput('rest', 'Repos par défaut (s)')}
+        <div><label class="lbl">Son des alertes</label><button class="btn w-full ${s.sound ? 'bg-arc/20 text-arc' : 'btn-ghost'}" data-a="toggleSound">${ic(s.sound ? 'volume-2' : 'volume-x')} ${s.sound ? 'Activé' : 'Coupé'}</button></div></div>
+      <p class="text-xs text-slate-500 mt-2">Prochaine séance : <b class="text-slate-300">${typeLabel(D.next)}</b> <button class="text-arc underline ml-1" data-a="swapNext">inverser</button></p>
+    </section>
+
+    <section class="card lg:col-span-2">
+      <div class="flex items-center justify-between gap-2 mb-3 flex-wrap"><h3 class="font-bold">Programme</h3>
+        <div class="w-56">${tabs([['upper', 'Upper'], ['lower', 'Lower']], pt, 'progType').replace('mb-4', 'mb-0')}</div></div>
+      ${D.active ? '<p class="text-xs text-orange-300 mb-3">Une séance est en cours : les modifications s\'appliqueront à la prochaine.</p>' : ''}
+      <div class="grid gap-3 xl:grid-cols-2">${D.program[pt].map((e, i) => `
+        <div class="rounded-xl bg-ink-700/50 p-3">
+          <div class="flex gap-2"><input class="inp !h-11 flex-1 font-semibold" value="${esc(e.name)}" data-in="prog" data-i="${i}" data-f="name">
+            <button class="w-10 h-11 rounded-lg bg-ink-600 flex items-center justify-center" data-a="progMove" data-i="${i}" data-v="-1" ${i === 0 ? 'disabled' : ''}>${ic('chevron-up', 'w-4 h-4')}</button>
+            <button class="w-10 h-11 rounded-lg bg-ink-600 flex items-center justify-center" data-a="progMove" data-i="${i}" data-v="1" ${i === D.program[pt].length - 1 ? 'disabled' : ''}>${ic('chevron-down', 'w-4 h-4')}</button>
+            <button class="w-10 h-11 rounded-lg text-red-400 bg-red-500/10 flex items-center justify-center" data-a="progDel" data-i="${i}">${ic('trash-2', 'w-4 h-4')}</button></div>
+          <div class="grid grid-cols-5 gap-1.5 mt-2">${[['sets', 'Séries'], ['repMin', 'Reps min'], ['repMax', 'Reps max'], ['inc', '+kg'], ['rest', 'Repos s']].map(([f, l]) => `
+            <div><label class="text-[10px] uppercase text-slate-500">${l}</label><input class="inp !h-10 !px-1 text-center" type="number" inputmode="decimal" value="${e[f]}" data-in="prog" data-i="${i}" data-f="${f}"></div>`).join('')}</div>
+          <div class="flex items-center gap-2 mt-2"><label class="text-[10px] uppercase text-slate-500 w-28 shrink-0 leading-tight">Tempo (s)<br>desc-bas-mont-haut</label><input class="inp !h-10 text-center tabular-nums" value="${esc(e.tempo || '')}" placeholder="3-1-1-0" data-in="prog" data-i="${i}" data-f="tempo"></div>
+          <label class="flex items-center gap-2 mt-2 text-sm text-slate-300"><input type="checkbox" class="w-5 h-5 accent-sky-400" ${e.secondary ? 'checked' : ''} data-in="prog" data-i="${i}" data-f="secondary"> Exercice secondaire (sauté en mode express)</label>
+        </div>`).join('')}</div>
+      <button class="btn btn-ghost w-full mt-3" data-a="progAdd">${ic('plus', 'w-4 h-4')} Ajouter un exercice ${typeLabel(pt)}</button>
+    </section>
+
+    ${syncCard()}
+    <section class="card lg:col-span-2">
+      <h3 class="font-bold mb-1">Sauvegarde des données</h3>
+      <p class="text-sm text-slate-400 mb-3">Tout est stocké dans ce navigateur (${fr(size / 1024, 0)} Ko). Garde aussi une sauvegarde exportée de temps en temps, en complément de la synchronisation.</p>
+      <div class="grid sm:grid-cols-3 gap-2">
+        <button class="btn btn-primary" data-a="exportData">${ic('download')} Exporter (JSON)</button>
+        <button class="btn btn-ghost" data-a="importData">${ic('upload')} Importer</button>
+        <button class="btn btn-danger" data-a="resetAll">${ic('trash-2')} Tout effacer</button>
+      </div>
+    </section>
+  </div>`;
+}
+
+/* ==================================================================
+   14. NAVIGATION & RENDU
+   ================================================================== */
+const NAV = [['dash', 'Accueil', 'house'], ['seance', 'Séance', 'dumbbell'], ['nutrition', 'Nutrition', 'utensils'], ['suivi', 'Suivi', 'activity'], ['mobilite', 'Mobilité', 'person-standing']];
+const VIEWS = { dash: renderDash, seance: renderWorkout, nutrition: renderNutrition, suivi: renderTracking, mobilite: renderMobility, reglages: renderSettings };
+
+function buildNav() {
+  $('bottomNavInner').innerHTML = NAV.map(([v, l, i]) => `<a href="#${v}" data-nav="${v}" class="relative flex flex-col items-center justify-center gap-0.5 h-16 text-[11px] font-semibold">${ic(i, 'w-6 h-6')}<span>${l}</span><span data-dot="${v}" class="hidden absolute top-2 right-[calc(50%-18px)] w-2 h-2 rounded-full bg-flame"></span></a>`).join('');
+  $('sideNav').innerHTML = [...NAV, ['reglages', 'Réglages', 'settings']].map(([v, l, i]) => `<a href="#${v}" data-nav="${v}" class="flex items-center gap-3 h-11 px-3 rounded-xl font-semibold">${ic(i)}<span class="flex-1">${l}</span><span data-dot="${v}" class="hidden w-2 h-2 rounded-full bg-flame"></span></a>`).join('');
+}
+function updateNav() {
+  document.querySelectorAll('[data-nav]').forEach(a => {
+    const on = a.dataset.nav === UI.view, side = a.closest('#sideNav');
+    a.classList.toggle(side ? 'bg-ink-600' : 'text-arc', on);
+    a.classList.toggle(side ? 'text-slate-400' : 'text-slate-500', !on);
+  });
+  document.querySelectorAll('[data-dot="seance"]').forEach(d => d.classList.toggle('hidden', !D.active));
+}
+function render() {
+  if (!VIEWS[UI.view]) UI.view = 'dash';
+  $('main').innerHTML = VIEWS[UI.view]();
+  updateNav(); icons(); drawCharts(); tick(); paintSync();
+}
+
+/* ---- Graphiques (Chart.js) ---- */
+function chartOpts(unit) {
+  return {
+    responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { labels: { color: '#cbd5e1', boxWidth: 12 } }, tooltip: { callbacks: { label: c => `${c.dataset.label} : ${fr(c.parsed.y, 2)} ${unit}` } } },
+    scales: { x: { ticks: { color: '#64748b', maxTicksLimit: 8 }, grid: { color: 'rgba(255,255,255,.04)' } }, y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(255,255,255,.06)' } } },
+  };
+}
+function drawCharts() {
+  if (!window.Chart) return;
+  Object.values(CH).forEach(c => c && c.destroy()); for (const k in CH) delete CH[k];
+  const series = weightSeries();
+  const w = $('wChart');
+  if (w && series.length >= 2) {
+    const last = series[series.length - 1].date;
+    const data = UI.wRange ? series.filter(x => daysBetween(x.date, last) < UI.wRange) : series;
+    CH.w = new Chart(w, { type: 'line', data: { labels: data.map(d => fmtShort(d.date)), datasets: [
+      { label: 'Poids', data: data.map(d => d.kg), borderColor: 'rgba(77,163,255,.45)', backgroundColor: '#4da3ff', pointRadius: 3, borderWidth: 1.5, tension: .2 },
+      { label: 'Moyenne 7 j', data: data.map(d => r1(d.avg * 10) / 10), borderColor: '#a5d8ff', borderWidth: 3, pointRadius: 0, tension: .35 },
+    ] }, options: chartOpts('kg') });
+  }
+  const dw = $('dashW');
+  if (dw && series.length >= 2) {
+    const data = series.slice(-30);
+    CH.dw = new Chart(dw, { type: 'line', data: { labels: data.map(d => fmtShort(d.date)), datasets: [{ label: 'Moy. 7 j', data: data.map(d => d.avg), borderColor: '#7dd3fc', borderWidth: 2.5, pointRadius: 0, tension: .35, fill: true, backgroundColor: 'rgba(125,211,252,.1)' }] },
+      options: { ...chartOpts('kg'), plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { ticks: { color: '#64748b', maxTicksLimit: 3 }, grid: { color: 'rgba(255,255,255,.05)' } } } } });
+  }
+  const rc = $('rChart');
+  if (rc) {
+    const t = todayISO(), ws = weekStart(t);
+    const weeks = Array.from({ length: 8 }, (_, k) => addDays(ws, (k - 7) * 7));
+    const km = weeks.map(w => runsInRange(w, addDays(w, 6)).reduce((s, r) => s + num(r.distance), 0));
+    CH.r = new Chart(rc, { type: 'bar', data: { labels: weeks.map(fmtShort), datasets: [{ label: 'Km', data: km, backgroundColor: '#4da3ff', borderRadius: 6 }] },
+      options: { ...chartOpts('km'), plugins: { legend: { display: false } } } });
+  }
+}
+
+/* ==================================================================
+   15. ACTIONS (délégation d'événements)
+   ================================================================== */
+const A = {
+  closeModal: () => { closeModal(); render(); },
+  modalBg: (el, e) => { if (e.target === $('modal')) closeModal(); },
+  // --- Séance
+  startSession: el => { if (D.active) return toast('Une séance est déjà en cours', 'err'); startSession(el.dataset.t); },
+  finishSession, cancelSession: () => cancelSession(false),
+  toggleExpress: () => {
+    const a = D.active; a.express = !a.express;
+    a.exercises.forEach(e => { if (e.secondary && !e.sets.some(s => s.done)) e.skipped = a.express; });
+    save(); render();
+  },
+  manualRest: () => { audio(); startRest(num(D.settings.rest) || 90); },
+  skipEx: el => { const e = D.active.exercises[el.dataset.i]; e.skipped = !e.skipped; save(); render(); },
+  addSet: el => { const e = D.active.exercises[el.dataset.i], l = e.sets[e.sets.length - 1] || {}; e.sets.push({ kg: l.kg ?? '', reps: l.reps ?? '', rpe: '', done: false }); save(); render(); },
+  delSet: el => { const e = D.active.exercises[el.dataset.i]; if (e.sets.length > 1) e.sets.pop(); save(); render(); },
+  doneSet: el => {
+    const e = D.active.exercises[el.dataset.e], s = e.sets[el.dataset.s];
+    if (!s.done && (s.reps === '' || num(s.reps) <= 0)) return toast('Indique le nombre de reps', 'err');
+    s.done = !s.done; save();
+    if (s.done) { audio(); startRest(num(e.rest) || num(D.settings.rest) || 90); try { navigator.vibrate && navigator.vibrate(40); } catch (x) {} }
+    render();
+  },
+  sessionDetail: el => sessionDetailModal(el.dataset.id),
+  delSession: el => { if (!confirm('Supprimer définitivement cette séance ?')) return; D.sessions = D.sessions.filter(s => s.id !== el.dataset.id); save(); closeModal(); render(); },
+  restAdd: el => addRest(num(el.dataset.s)),
+  restStop: () => stopRest(),
+  // --- Guide tempo
+  tempoOpen: el => openTempo(+el.dataset.i),
+  tpAdj: el => { if (TP.on) return; const k = +el.dataset.k; TP.tempo[k] = Math.max(0, Math.min(10, TP.tempo[k] + +el.dataset.v)); saveTempo(); renderTempo(); },
+  tpReps: el => { if (TP.on) return; TP.reps = Math.max(1, Math.min(50, TP.reps + +el.dataset.v)); renderTempo(); },
+  tpStart,
+  tpStop: () => { TP.on = false; TP.done = false; renderTempo(); },
+  // --- Nutrition
+  nutriSub: el => { UI.nutriSub = el.dataset.v; render(); },
+  addTab: el => { UI.addTab = el.dataset.v; render(); },
+  nDay: el => { UI.nutriDate = addDays(UI.nutriDate, +el.dataset.v); render(); },
+  nToday: () => { UI.nutriDate = todayISO(); render(); },
+  toggleRunDay: () => { D.runDays[UI.nutriDate] = !isRunDay(UI.nutriDate); save(); render(); },
+  addRecipeMeal: () => {
+    const r = D.recipes.find(x => x.id === $('addRecipeSel').value), n = num($('addRecipePortions').value) || 1; if (!r) return;
+    const p = recipeTotals(r).per;
+    addMeal(UI.nutriDate, { name: `${r.name}${n !== 1 ? ` (×${fr(n, 2)})` : ''}`, kcal: p.kcal * n, p: p.p * n, f: p.f * n, c: p.c * n }); render(); toast('Repas ajouté');
+  },
+  recipeToday: el => { const r = D.recipes.find(x => x.id === el.dataset.id), p = recipeTotals(r).per; addMeal(todayISO(), { name: r.name, ...p }); toast(`1 portion ajoutée à aujourd'hui`); },
+  addQuick: el => { const q = D.quick.find(x => x.id === el.dataset.id); addMeal(UI.nutriDate, { name: q.name, kcal: q.kcal, p: q.p, f: q.f, c: q.c }); render(); toast('Repas ajouté'); },
+  delQuick: el => { if (!confirm('Supprimer ce repas type ?')) return; D.quick = D.quick.filter(q => q.id !== el.dataset.id); save(); render(); },
+  addManual: () => {
+    const name = $('m_name').value.trim() || 'Repas', p = num($('m_p').value), f = num($('m_f').value), c = num($('m_c').value);
+    const kcal = num($('m_kcal').value) || (p * 4 + f * 9 + c * 4);
+    if (!kcal) return toast('Renseigne au moins les kcal ou les macros', 'err');
+    const m = { name, kcal, p, f, c };
+    addMeal(UI.nutriDate, m);
+    if ($('m_save').checked) { D.quick.push({ id: uid(), ...m }); save(); }
+    render(); toast('Repas ajouté');
+  },
+  delMeal: el => { D.meals[UI.nutriDate] = (D.meals[UI.nutriDate] || []).filter(m => m.id !== el.dataset.id); save(); render(); },
+  copyYesterday: () => { (D.meals[addDays(UI.nutriDate, -1)] || []).forEach(m => addMeal(UI.nutriDate, { name: m.name, kcal: m.kcal, p: m.p, f: m.f, c: m.c })); render(); toast('Repas de la veille copiés'); },
+  newRecipe: () => { DRAFT = { id: null, name: '', cat: 'Meal prep', portions: 5, ingredients: [{ name: '', qty: '', kcal: '', p: '', f: '', c: '' }] }; recipeModal(); },
+  editRecipe: el => { DRAFT = JSON.parse(JSON.stringify(D.recipes.find(r => r.id === el.dataset.id))); recipeModal(); },
+  delRecipe: el => { if (!confirm('Supprimer cette recette ?')) return; D.recipes = D.recipes.filter(r => r.id !== el.dataset.id); delete D.plan[el.dataset.id]; save(); render(); },
+  addIng: () => { DRAFT.ingredients.push({ name: '', qty: '', kcal: '', p: '', f: '', c: '' }); recipeModal(); },
+  delIng: el => { DRAFT.ingredients.splice(+el.dataset.k, 1); recipeModal(); },
+  saveRecipe,
+  plan: el => { const id = el.dataset.id; D.plan[id] = Math.max(0, (D.plan[id] || 0) + +el.dataset.v); save(); render(); },
+  resetPlan: () => { if (!confirm('Vider le planning de la semaine ?')) return; D.plan = {}; D.shopChecked = {}; save(); render(); },
+  uncheckShop: () => { D.shopChecked = {}; save(); render(); },
+  addShopItem: () => {
+    const name = ($('s_name').value || '').trim();
+    if (!name) return toast("Écris le nom de l'article", 'err');
+    (D.shopExtra = D.shopExtra || []).push({ id: uid(), name, qty: ($('s_qty').value || '').trim() });
+    save(); render(); const el = $('s_name'); if (el) el.focus();
+  },
+  delShopItem: el => { D.shopExtra = (D.shopExtra || []).filter(x => x.id !== el.dataset.id); delete D.shopChecked['x:' + el.dataset.id]; save(); render(); },
+  clearShopDone: () => { D.shopExtra = (D.shopExtra || []).filter(x => !D.shopChecked['x:' + x.id]); save(); render(); },
+  copyShop: async () => {
+    const txt = '🛒 Courses de la semaine\n' + shopAll().filter(i => !D.shopChecked[i.key]).map(i => `• ${i.name}${i.qtyText ? ' — ' + i.qtyText : ''}`).join('\n');
+    try { if (navigator.share) await navigator.share({ title: 'Liste de courses', text: txt }); else { await navigator.clipboard.writeText(txt); toast('Liste copiée dans le presse-papiers'); } }
+    catch (e) { try { await navigator.clipboard.writeText(txt); toast('Liste copiée'); } catch (x) {} }
+  },
+  // --- Synchronisation
+  syncOn: async () => { const t = ($('sy_token').value || '').trim(); if (!t) return toast("Colle d'abord ton code d'accès", 'err'); await syncConnect(t); render(); },
+  syncNow: () => syncNow(true),
+  syncOff: () => { if (!confirm("Déconnecter cet appareil ? Les données restent ici et dans le cloud, mais ne seront plus synchronisées.")) return; SYNC = {}; saveSync(); setStatus('idle'); render(); },
+  // --- Suivi
+  trackSub: el => { UI.trackSub = el.dataset.v; if (UI.view === 'suivi') render(); },
+  wRange: el => { UI.wRange = +el.dataset.v; render(); },
+  saveWeight: () => {
+    const date = $('w_date').value || todayISO(), kg = num($('w_kg').value);
+    if (kg < 25 || kg > 400) return toast('Poids invalide', 'err');
+    D.weights = D.weights.filter(w => w.date !== date); D.weights.push({ date, kg }); save(); render(); toast('Pesée enregistrée');
+  },
+  delWeight: el => { D.weights = D.weights.filter(w => w.date !== el.dataset.v); save(); render(); },
+  pickFeel: el => { RUNFORM.feel = +el.dataset.v; document.querySelectorAll('#r_feel button').forEach(b => { const on = +b.dataset.v === RUNFORM.feel; b.className = `h-12 rounded-xl text-2xl ${on ? 'bg-arc/20 ring-2 ring-arc' : 'bg-ink-700'}`; }); },
+  pickKnee: el => { RUNFORM.knee = +el.dataset.v; document.querySelectorAll('#r_knee button').forEach(b => { const on = +b.dataset.v === RUNFORM.knee; b.className = `h-11 rounded-xl text-sm font-semibold ${on ? 'bg-arc/20 ring-2 ring-arc' : 'bg-ink-700'}`; }); },
+  saveRun: () => {
+    const duration = num($('r_dur').value), distance = num($('r_dist').value);
+    if (!duration && !distance) return toast('Renseigne la durée ou la distance', 'err');
+    D.runs.push({ id: uid(), at: Date.now(), date: $('r_date').value || todayISO(), type: $('r_type').value, duration, distance, feel: RUNFORM.feel, knee: RUNFORM.knee, notes: $('r_notes').value.trim() });
+    Object.assign(RUNFORM, { feel: 3, knee: 0 }); save(); render(); toast('Sortie enregistrée — bonus kcal appliqué ce jour-là');
+  },
+  delRun: el => { if (!confirm('Supprimer cette sortie ?')) return; D.runs = D.runs.filter(r => r.id !== el.dataset.id); save(); render(); },
+  // --- Mobilité
+  mobStart, mobScale: el => { MOB.scale = +el.dataset.v; render(); },
+  mobPause: () => { MOB.paused = !MOB.paused; render(); },
+  mobNext: () => mobGoto(MOB.idx + 1), mobPrev: () => mobGoto(MOB.idx - 1),
+  mobStop: () => { MOB.on = false; keepAwake(false); render(); },
+  // --- Réglages
+  progType: el => { UI.progType = el.dataset.v; render(); },
+  progAdd: () => { D.program[UI.progType].push(ex('Nouvel exercice', 3, 8, 12, 2.5, false, 90)); save(); render(); },
+  progDel: el => { if (!confirm('Supprimer cet exercice du programme ? (l\'historique est conservé)')) return; D.program[UI.progType].splice(+el.dataset.i, 1); save(); render(); },
+  progMove: el => { const l = D.program[UI.progType], i = +el.dataset.i, j = i + +el.dataset.v; [l[i], l[j]] = [l[j], l[i]]; save(); render(); },
+  toggleSound: () => { D.settings.sound = !D.settings.sound; save(); render(); if (D.settings.sound) beep(); },
+  swapNext: () => { D.next = D.next === 'upper' ? 'lower' : 'upper'; save(); render(); },
+  resetTargets: () => { Object.assign(D.settings, { kcal: 2616, p: 181, f: 78, c: 296, runBonus: 200 }); save(); render(); },
+  exportData: () => {
+    const blob = new Blob([JSON.stringify(D, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `bluearc-sauvegarde-${todayISO()}.json`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast('Sauvegarde exportée');
+  },
+  importData: () => $('importFile').click(),
+  resetAll: () => { if (!confirm('Effacer TOUTES les données de cet appareil ?')) return; if (!confirm('Vraiment ? Exporte d\'abord si besoin.')) return; D = defaultData(); save(); render(); toast('Données réinitialisées'); },
+};
+
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-a]');
+  if (!el || el.disabled) return;
+  const fn = A[el.dataset.a]; if (fn) fn(el, e);
+});
+
+/* Saisie en direct (sans re-rendu pour garder le focus) */
+function onInput(e) {
+  const el = e.target, k = el.dataset.in; if (!k) return;
+  const val = el.type === 'checkbox' ? el.checked : el.value;
+  if (k === 'set' && D.active) { D.active.exercises[el.dataset.e].sets[el.dataset.s][el.dataset.f] = val; save(); }
+  else if (k === 'draft' && DRAFT) { DRAFT[el.dataset.f] = val; updateDraftTotals(); }
+  else if (k === 'ing' && DRAFT) {
+    const g = DRAFT.ingredients[el.dataset.k]; g[el.dataset.f] = val;
+    if (el.dataset.f === 'name') fillIngFromFood(+el.dataset.k, e.type === 'change');
+    updateDraftTotals();
+  }
+  else if (k === 'shop') { D.shopChecked[el.dataset.k] = val; save(); if (e.type === 'change') render(); }
+  else if (k === 'setting') {
+    D.settings[el.dataset.k] = num(val); save();
+    if ($('macroK')) $('macroK').textContent = `Les macros représentent ${r0(D.settings.p * 4 + D.settings.f * 9 + D.settings.c * 4)} kcal.`;
+    if (el.dataset.k === 'runBonus' && $('bonusVal')) $('bonusVal').textContent = `+${val} kcal`;
+  }
+  else if (k === 'prog') {
+    const ex = D.program[UI.progType][el.dataset.i], f = el.dataset.f;
+    ex[f] = (f === 'name' || f === 'tempo') ? val : f === 'secondary' ? !!val : num(val); save();
+  }
+}
+document.addEventListener('input', onInput);
+document.addEventListener('change', onInput);
+
+$('importFile').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const data = JSON.parse(rd.result);
+      if (!data || typeof data !== 'object' || !data.settings) throw new Error('format');
+      if (!confirm('Remplacer les données actuelles par celles du fichier ?')) return;
+      D = migrate(data); save(); render(); toast('Données importées ✅');
+    } catch (err) { toast('Fichier invalide', 'err'); }
+    e.target.value = '';
+  };
+  rd.readAsText(f);
+});
+
+window.addEventListener('hashchange', () => { UI.view = location.hash.slice(1) || 'dash'; render(); window.scrollTo(0, 0); });
+document.addEventListener('pointerdown', () => audio(), { once: true });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { if (D.active || MOB.on) keepAwake(true); if (UI.nutriDate !== todayISO() && UI.view !== 'nutrition') UI.nutriDate = todayISO(); tick(); syncNow(); } });
+window.addEventListener('storage', e => { if (e.key === KEY) { D = load(); render(); } });
+
+/* ---- Démarrage ---- */
+UI.view = location.hash.slice(1) || 'dash';
+buildNav();
+render();
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.target.id === 's_name' || e.target.id === 's_qty')) { e.preventDefault(); A.addShopItem(); } });
+syncNow();
+setInterval(() => { if (document.visibilityState === 'visible') syncNow(); }, 45000);
+</script>
+</body>
+</html>
